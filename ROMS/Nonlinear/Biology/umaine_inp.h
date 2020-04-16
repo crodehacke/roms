@@ -11,6 +11,7 @@
       USE mod_biology
       USE mod_ncparam
       USE mod_scalars
+      USE inp_decode_mod
 !
       implicit none
 !
@@ -25,8 +26,6 @@
       integer :: iTrcStr, iTrcEnd
       integer :: i, ifield, is, itracer, itrc, ng, nline, status
 
-      integer :: decode_line, load_i, load_l, load_lbc, load_r
-
       integer :: igrid
 
       logical, dimension(NBT,Ngrids) :: Ltrc
@@ -37,11 +36,11 @@
 
       real(r8), dimension(NBT,Ngrids) :: Rbio
 
-      real(r8), dimension(200) :: Rval
+      real(r8), dimension(nRval) :: Rval
 
       character (len=40 ) :: KeyWord
       character (len=256) :: line
-      character (len=256), dimension(200) :: Cval
+      character (len=256), dimension(nCval) :: Cval
 !
 !-----------------------------------------------------------------------
 !  Initialize.
@@ -331,6 +330,28 @@
                   Tnudg(i,ng)=Rbio(itrc,ng)
                 END DO
               END DO
+            CASE ('Hadvection')
+              IF (itracer.lt.NBT) THEN
+                itracer=itracer+1
+              ELSE
+                itracer=1                      ! next nested grid
+              END IF
+              itrc=idbio(itracer)
+              Npts=load_tadv(Nval, Cval, line, nline, itrc, igrid,      &
+     &                       itracer, idbio(iTrcStr), idbio(iTrcEnd),   &
+     &                       Vname(1,idTvar(itrc)),                     &
+     &                       Hadvection)
+            CASE ('Vadvection')
+              IF (itracer.lt.NBT) THEN
+                itracer=itracer+1
+              ELSE
+                itracer=1                      ! next nested grid
+              END IF
+              itrc=idbio(itracer)
+              Npts=load_tadv(Nval, Cval, line, nline, itrc, igrid,      &
+     &                       itracer, idbio(iTrcStr), idbio(iTrcEnd),   &
+     &                       Vname(1,idTvar(itrc)),                     &
+     &                       Vadvection)
             CASE ('LBC(isTvar)')
               IF (itracer.lt.NBT) THEN
                 itracer=itracer+1

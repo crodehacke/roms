@@ -3,7 +3,7 @@
 !
 !svn $Id$
 !=======================================================================
-!  Copyright (c) 2002-2016 The ROMS/TOMS Group                         !
+!  Copyright (c) 2002-2020 The ROMS/TOMS Group                         !
 !    Licensed under a MIT/X style license                              !
 !    See License_ROMS.txt                           Hernan G. Arango   !
 !========================================== Alexander F. Shchepetkin ===
@@ -69,7 +69,8 @@
      &                   GRID(ng) % z_w,                                &
 #endif
 #if defined DIFF_GRID || defined DIFF_3DCOEF || \
-    defined VISC_GRID || defined VISC_3DCOEF
+    defined VISC_GRID || defined VISC_3DCOEF || \
+    defined ICE_STRENGTH_QUAD
      &                   GRID(ng) % grdscl,                             &
 #endif
 #if defined DIFF_3DCOEF
@@ -119,7 +120,8 @@
      &                         Hz, z_r, z_w,                            &
 #endif
 #if defined DIFF_GRID || defined DIFF_3DCOEF || \
-    defined VISC_GRID || defined VISC_3DCOEF
+    defined VISC_GRID || defined VISC_3DCOEF || \
+    defined ICE_STRENGTH_QUAD
      &                         grdscl,                                  &
 #endif
 #if defined DIFF_3DCOEF
@@ -187,7 +189,8 @@
 #  endif
 # endif
 #if defined DIFF_GRID || defined DIFF_3DCOEF || \
-    defined VISC_GRID || defined VISC_3DCOEF
+    defined VISC_GRID || defined VISC_3DCOEF || \
+    defined ICE_STRENGTH_QUAD
       real(r8), intent(out) :: grdscl(LBi:,LBj:)
 # endif
 # if defined DIFF_3DCOEF
@@ -241,7 +244,8 @@
 #  endif
 # endif
 #if defined DIFF_GRID || defined DIFF_3DCOEF || \
-    defined VISC_GRID || defined VISC_3DCOEF
+    defined VISC_GRID || defined VISC_3DCOEF || \
+    defined ICE_STRENGTH_QUAD
       real(r8), intent(out) :: grdscl(LBi:UBi,LBj:UBj)
 # endif
 # if defined DIFF_3DCOEF
@@ -283,22 +287,25 @@
 #ifdef NESTING
       integer :: cr, dg, ig, rg
 #endif
-      real(r8), parameter :: Large = 1.0E+20_r8
 #if defined DIFF_3DCOEF || defined VISC_3DCOEF
       real(r8), parameter :: PecletCoef = 1.0_r8 / 12.0_r8
       real(r8), parameter :: Uscale = 0.1_r8
 #endif
       real(r8) :: cff, cff1, cff2
-      real(r8) :: my_DXmax, my_DXmin, my_DYmax, my_DYmin
-#ifdef SOLVE3D
-      real(r8) :: my_DZmax, my_DZmin
+#ifdef NESTING
+      real(r8) :: SecScale
 #endif
-      real(r8) :: my_Cg_Cor, my_Cg_max, my_Cg_min, my_grdmax
+      real(dp) :: my_DXmax, my_DXmin, my_DYmax, my_DYmin
+
+#ifdef SOLVE3D
+      real(dp) :: my_DZmax, my_DZmin
+#endif
+      real(dp) :: my_Cg_Cor, my_Cg_max, my_Cg_min, my_grdmax
 #if defined DIFF_3DCOEF
-      real(r8) :: my_DiffMax, my_DiffMin
+      real(dp) :: my_DiffMax, my_DiffMin
 #endif
 #if defined VISC_3DCOEF
-      real(r8) :: my_ViscMax, my_ViscMin
+      real(dp) :: my_ViscMax, my_ViscMin
 #endif
 #if defined DIFF_3DCOEF || defined VISC_3DCOEF
       character (len=4) :: units
@@ -308,7 +315,7 @@
 #endif
 
 #ifdef DISTRIBUTE
-      real(r8), dimension(14) :: buffer
+      real(dp), dimension(14) :: buffer
       character (len=3), dimension(14) :: op_handle
 #endif
 
@@ -607,7 +614,8 @@
 #endif
 
 #if defined DIFF_GRID || defined DIFF_3DCOEF || \
-    defined VISC_GRID || defined VISC_3DCOEF
+    defined VISC_GRID || defined VISC_3DCOEF || \
+    defined ICE_STRENGTH_QUAD
 !
 !-----------------------------------------------------------------------
 ! Determine the squared root of the area of each grid cell used to
@@ -724,7 +732,7 @@
         END DO
       END DO
 
-      CALL set_depth_tile (ng, tile,                                    &
+      CALL set_depth_tile (ng, tile, iNLM,                              &
      &                     LBi, UBi, LBj, UBj,                          &
      &                     IminS, ImaxS, JminS, JmaxS,                  &
      &                     nstp, nnew,                                  &
@@ -826,58 +834,35 @@
       END IF
 #endif
 !$OMP CRITICAL (REDUCTIONS)
-      IF (tile_count.eq.0) THEN
-        Cg_min=my_Cg_min
-        Cg_max=my_Cg_max
-        Cg_Cor=my_Cg_Cor
-        grdmax(ng)=my_grdmax
-        DXmin(ng)=my_DXmin
-        DXmax(ng)=my_DXmax
-        DYmin(ng)=my_DYmin
-        DYmax(ng)=my_DYmax
+      Cg_min(ng)=MIN(Cg_min(ng),my_Cg_min)
+      Cg_max(ng)=MAX(Cg_max(ng),my_Cg_max)
+      Cg_Cor(ng)=MAX(Cg_Cor(ng),my_Cg_Cor)
+      grdmax(ng)=MAX(grdmax(ng),my_grdmax)
+      DXmin(ng)=MIN(DXmin(ng),my_DXmin)
+      DXmax(ng)=MAX(DXmax(ng),my_DXmax)
+      DYmin(ng)=MIN(DYmin(ng),my_DYmin)
+      DYmax(ng)=MAX(DYmax(ng),my_DYmax)
 #ifdef SOLVE3D
-        DZmin(ng)=my_DZmin
-        DZmax(ng)=my_DZmax
+      DZmin(ng)=MIN(DZmin(ng),my_DZmin)
+      DZmax(ng)=MAX(DZmax(ng),my_DZmax)
 #endif
 #ifdef DIFF_3DCOEF
-        DiffMin(ng)=my_DiffMin
-        DiffMax(ng)=my_DiffMax
+      DiffMin(ng)=MIN(DiffMin(ng),my_DiffMin)
+      DiffMax(ng)=MAX(DiffMax(ng),my_DiffMax)
 #endif
 #ifdef VISC_3DCOEF
-        ViscMin(ng)=my_ViscMin
-        ViscMax(ng)=my_ViscMax
+      ViscMin(ng)=MIN(ViscMin(ng),my_ViscMin)
+      ViscMax(ng)=MAX(ViscMax(ng),my_ViscMax)
 #endif
-      ELSE
-        Cg_min=MIN(Cg_min,my_Cg_min)
-        Cg_max=MAX(Cg_max,my_Cg_max)
-        Cg_Cor=MAX(Cg_Cor,my_Cg_Cor)
-        grdmax(ng)=MAX(grdmax(ng),my_grdmax)
-        DXmin(ng)=MIN(DXmin(ng),my_DXmin)
-        DXmax(ng)=MAX(DXmax(ng),my_DXmax)
-        DYmin(ng)=MIN(DYmin(ng),my_DYmin)
-        DYmax(ng)=MAX(DYmax(ng),my_DYmax)
-#ifdef SOLVE3D
-        DZmin(ng)=MIN(DZmin(ng),my_DZmin)
-        DZmax(ng)=MAX(DZmax(ng),my_DZmax)
-#endif
-#ifdef DIFF_3DCOEF
-        DiffMin(ng)=MIN(DiffMin(ng),my_DiffMin)
-        DiffMax(ng)=MAX(DiffMax(ng),my_DiffMax)
-#endif
-#ifdef VISC_3DCOEF
-        ViscMin(ng)=MIN(ViscMin(ng),my_ViscMin)
-        ViscMax(ng)=MAX(ViscMax(ng),my_ViscMax)
-#endif
-      END IF
       tile_count=tile_count+1
       IF (tile_count.eq.NSUB) THEN
         tile_count=0
 #ifdef DISTRIBUTE
-        buffer(1)=Cg_min
+        buffer(1)=Cg_min(ng)
         op_handle(1)='MIN'
-        buffer(2)=Cg_max
+        buffer(2)=Cg_max(ng)
         op_handle(2)='MAX'
-        buffer(3)=Cg_Cor
+        buffer(3)=Cg_Cor(ng)
         op_handle(3)='MAX'
         buffer(4)=grdmax(ng)
         op_handle(4)='MAX'
@@ -923,9 +908,9 @@
         op_handle(14)='MAX'
 # endif
         CALL mp_reduce (ng, model, 14, buffer, op_handle)
-        Cg_min=buffer(1)
-        Cg_max=buffer(2)
-        Cg_Cor=buffer(3)
+        Cg_min(ng)=buffer(1)
+        Cg_max(ng)=buffer(2)
+        Cg_Cor(ng)=buffer(3)
         grdmax(ng)=buffer(4)
         DXmin(ng)=buffer(5)
         DXmax(ng)=buffer(6)
@@ -959,7 +944,7 @@
   20      FORMAT (' Minimum Z-grid spacing, DZmin = ',1pe15.8,' m',/,   &
      &            ' Maximum Z-grid spacing, DZmax = ',1pe15.8,' m')
 #endif
-          WRITE (stdout,30) Cg_min, Cg_max, Cg_Cor
+          WRITE (stdout,30) Cg_min(ng), Cg_max(ng), Cg_Cor(ng)
   30      FORMAT (/,' Minimum barotropic Courant Number = ', 1pe15.8,/, &
      &              ' Maximum barotropic Courant Number = ', 1pe15.8,/, &
      &              ' Maximum Coriolis   Courant Number = ', 1pe15.8,/)
@@ -1100,15 +1085,19 @@
 !  Check refined grid time-step.  The time-step size for refined grids
 !  needs to be an exact mode multiple of its coarser donor grid.  In
 !  principle, it can be a "RefineScale" factor smaller.  However, other
-!  integer smaller or larger factor are allowed such that:
+!  integer smaller or larger factor is allowed such that:
 !
-!          MOD(dt(dg), dt(rg)) = 0        dg:  donor  coarse grid
-!                                         rg:  receiver fine grid
+!    MOD(dt(dg)*SecScale, dt(rg)*SecScale) = 0   dg:  donor  coarse grid
+!                                                rg:  receiver fine grid
 !
+!  Notice that SecScale is used to avoid roundoff when the timestep
+!  between donor and receiver grids are small and less than one.
+!
+        SecScale=1000.0_dp              ! seconds to milliseconds
         DO ig=1,Ngrids
           IF (RefinedGrid(ig).and.(RefineScale(ig).gt.0)) THEN
             dg=CoarserDonor(ig)
-            IF (MOD(dt(dg),dt(ig)).ne.0.0d0) THEN
+            IF (MOD(dt(dg)*SecScale,dt(ig)*SecScale).ne.0.0_dp) THEN
               IF (DOMAIN(ng)%SouthWest_Test(tile)) THEN
                 IF (Master) THEN
                   WRITE (stdout,100) ig, dt(ig), dg, dt(dg),            &
@@ -1227,8 +1216,8 @@
             IF (MOD(NVsteps(rec,is),2).ne.0) THEN
               NVsteps(rec,is)=NVsteps(rec,is)+1
             END IF
-# endif
           END IF
+# endif
         END DO
       END DO
 
@@ -1321,7 +1310,7 @@
                 Text='South bry Hconvolution, NHstepsB, DTsizeHB ='
               ELSE IF (ibry.eq.ieast) THEN
                 Text='East  bry Hconvolution, NHstepsB, DTsizeHB ='
-              ELSE IF (ibry.eq.isouth) THEN
+              ELSE IF (ibry.eq.inorth) THEN
                 Text='North bry Hconvolution, NHstepsB, DTsizeHB ='
               END IF
               IF (HdecayB(is,ibry,ng).gt.0.0_r8) THEN
@@ -1343,7 +1332,7 @@
                 Text='South bry Vconvolution, NVstepsB, DTsizeVB ='
               ELSE IF (ibry.eq.ieast) THEN
                 Text='East  bry Vconvolution, NVstepsB, DTsizeVB ='
-              ELSE IF (ibry.eq.isouth) THEN
+              ELSE IF (ibry.eq.inorth) THEN
                 Text='North bry Vconvolution, NVstepsB, DTsizeVB ='
               END IF
               IF (VdecayB(is,ibry,ng).gt.0.0_r8) THEN

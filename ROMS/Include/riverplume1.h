@@ -1,7 +1,7 @@
 /*
 ** svn $Id$
 *******************************************************************************
-** Copyright (c) 2002-2016 The ROMS/TOMS Group                               **
+** Copyright (c) 2002-2020 The ROMS/TOMS Group                               **
 **   Licensed under a MIT/X style license                                    **
 **   See License_ROMS.txt                                                    **
 *******************************************************************************
@@ -9,7 +9,7 @@
 ** Options for River Plume Test (original version).
 **
 ** Application flag:   RIVERPLUME1
-** Input script:       ocean_riverplume1.in
+** Input script:       roms_riverplume1.in
 */
 
 #define UV_ADV
@@ -18,8 +18,6 @@
 #define DJ_GRADPS
 #define SPLINES_VDIFF
 #define SPLINES_VVISC
-#define TS_A4HADVECTION
-#define TS_A4VADVECTION
 #define TS_DIF2
 #define MIX_GEO_TS
 #define NONLIN_EOS

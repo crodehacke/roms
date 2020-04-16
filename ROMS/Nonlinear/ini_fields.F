@@ -4,7 +4,7 @@
 !
 !svn $Id$
 !================================================== Hernan G. Arango ===
-!  Copyright (c) 2002-2016 The ROMS/TOMS Group       Andrew M. Moore   !
+!  Copyright (c) 2002-2020 The ROMS/TOMS Group       Andrew M. Moore   !
 !    Licensed under a MIT/X style license                              !
 !    See License_ROMS.txt                                              !
 !=======================================================================
@@ -50,7 +50,7 @@
 # include "tile.h"
 !
 # ifdef PROFILE
-      CALL wclock_on (ng, iNLM, 2)
+      CALL wclock_on (ng, iNLM, 2, __LINE__, __FILE__)
 # endif
       CALL ini_fields_tile (ng, tile, model,                            &
      &                      LBi, UBi, LBj, UBj,                         &
@@ -98,10 +98,6 @@
      &                      ICE(ng) % hi,                               &
      &                      ICE(ng) % hsn,                              &
      &                      ICE(ng) % ti,                               &
-#   ifdef MELT_PONDS
-     &                      ICE(ng) % apond,                            &
-     &                      ICE(ng) % hpond,                            &
-#   endif
      &                      ICE(ng) % ageice,                           &
 #  endif
 # endif
@@ -109,7 +105,7 @@
      &                      OCEAN(ng) % vbar,                           &
      &                      OCEAN(ng) % zeta)
 # ifdef PROFILE
-      CALL wclock_off (ng, iNLM, 2)
+      CALL wclock_off (ng, iNLM, 2, __LINE__, __FILE__)
 # endif
       RETURN
       END SUBROUTINE ini_fields
@@ -146,9 +142,6 @@
 #  ifdef ICE_MODEL
      &                            ui, vi, ai, hi, hsn,                  &
      &                            ti, ageice,                           &
-#   ifdef MELT_PONDS
-     &                            apond, hpond,                         &
-#   endif
 #  endif
 # endif
      &                            ubar, vbar, zeta)
@@ -248,10 +241,6 @@
       real(r8), intent(inout) :: hsn(LBi:,LBj:,:)
       real(r8), intent(inout) :: ti(LBi:,LBj:,:)
       real(r8), intent(inout) :: ageice(LBi:,LBj:,:)
-#    ifdef MELT_PONDS
-      real(r8), intent(inout) :: apond(LBi:,LBj:,:)
-      real(r8), intent(inout) :: hpond(LBi:,LBj:,:)
-#    endif
 #   endif
 #  endif
       real(r8), intent(inout) :: ubar(LBi:,LBj:,:)
@@ -304,10 +293,6 @@
       real(r8), intent(inout) :: hsn(LBi:UBi,LBj:UBj,2)
       real(r8), intent(inout) :: ti(LBi:UBi,LBj:UBj,2)
       real(r8), intent(inout) :: ageice(LBi:UBi,LBj:UBj,2)
-#    ifdef MELT_PONDS
-      real(r8), intent(inout) :: apond(LBi:UBi,LBj:UBj,2)
-      real(r8), intent(inout) :: hpond(LBi:UBi,LBj:UBj,2)
-#    endif
 #   endif
 #  endif
       real(r8), intent(inout) :: ubar(LBi:UBi,LBj:UBj,3)
@@ -834,20 +819,12 @@
             cff2=hi(i,j,nstp)
             cff3=hsn(i,j,nstp)
             cff4=ti(i,j,nstp)
-#  ifdef MELT_PONDS
-            cff5=apond(i,j,nstp)
-            cff6=hpond(i,j,nstp)
-#  endif
             cff7=ageice(i,j,nstp)
 #  ifdef MASKING
             cff1=cff1*rmask(i,j)
             cff2=cff2*rmask(i,j)
             cff3=cff3*rmask(i,j)
             cff4=cff4*rmask(i,j)
-#   ifdef MELT_PONDS
-            cff5=cff5*rmask(i,j)
-            cff6=cff6*rmask(i,j)
-#   endif
             cff7=cff7*rmask(i,j)
 #  endif
             ai(i,j,nstp)=cff1
@@ -858,12 +835,6 @@
             hsn(i,j,nnew)=cff3
             ti(i,j,nstp)=cff4
             ti(i,j,nnew)=cff4
-#  ifdef MELT_PONDS
-            apond(i,j,nstp)=cff5
-            apond(i,j,nnew)=cff5
-            hpond(i,j,nstp)=cff6
-            hpond(i,j,nnew)=cff6
-#  endif
             ageice(i,j,nstp)=cff7
             ageice(i,j,nnew)=cff7
           END DO
@@ -889,14 +860,6 @@
           CALL exchange_r2d_tile (ng, tile,                             &
      &                            LBi, UBi, LBj, UBj,                   &
      &                            ti(:,:,i))
-#  ifdef MELT_PONDS
-          CALL exchange_r2d_tile (ng, tile,                             &
-     &                            LBi, UBi, LBj, UBj,                   &
-     &                            apond(:,:,i))
-          CALL exchange_r2d_tile (ng, tile,                             &
-     &                            LBi, UBi, LBj, UBj,                   &
-     &                            hpond(:,:,i))
-#  endif
           CALL exchange_r2d_tile (ng, tile,                             &
      &                            LBi, UBi, LBj, UBj,                   &
      &                            ageice(:,:,i))
@@ -913,13 +876,6 @@
      &                      NghostPoints,                               &
      &                      EWperiodic(ng), NSperiodic(ng),             &
      &                      hsn, ti, ageice)
-#   ifdef MELT_PONDS
-        CALL mp_exchange3d (ng, tile, model, 2,                         &
-     &                      LBi, UBi, LBj, UBj, 1, 2,                   &
-     &                      NghostPoints,                               &
-     &                      EWperiodic(ng), NSperiodic(ng),             &
-     &                      apond, hpond)
-#   endif
 #  endif
 # endif
 
@@ -997,7 +953,7 @@
 # include "tile.h"
 !
 # ifdef PROFILE
-      CALL wclock_on (ng, iNLM, 2)
+      CALL wclock_on (ng, iNLM, 2, __LINE__, __FILE__)
 # endif
       CALL ini_zeta_tile (ng, tile, model,                              &
      &                    LBi, UBi, LBj, UBj,                           &
@@ -1020,7 +976,7 @@
 # endif
      &                    OCEAN(ng) % zeta)
 # ifdef PROFILE
-      CALL wclock_off (ng, iNLM, 2)
+      CALL wclock_off (ng, iNLM, 2, __LINE__, __FILE__)
 # endif
 
       RETURN

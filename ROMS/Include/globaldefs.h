@@ -3,7 +3,7 @@
 **
 ** svn $Id$
 ********************************************************** Hernan G. Arango ***
-** Copyright (c) 2002-2016 The ROMS/TOMS Group     Alexander F. Shchepetkin  **
+** Copyright (c) 2002-2020 The ROMS/TOMS Group     Alexander F. Shchepetkin  **
 **   Licensed under a MIT/X style license                                    **
 **   See License_ROMS.txt                                                    **
 *******************************************************************************
@@ -48,6 +48,17 @@
 #endif
 
 /*
+** Make sure that either "mpi_allgather" or "mpi_allreduce" is used
+** in mp_reduce.  Low-level routines give an error.
+*/
+
+#ifdef DISTRIBUTE
+# if !(defined REDUCE_ALLGATHER || defined REDUCE_ALLREDUCE)
+#  define REDUCE_ALLGATHER
+# endif
+#endif
+
+/*
 ** Turn ON/OFF time profiling.
 */
 
@@ -72,11 +83,20 @@
 #define RHO_SURF
 
 /*
-** Turn ON/OFF double precision for real type variables and
-** associated intrinsic functions.
+** Turn ON/OFF double precision arithmetic in numerical kernel (default)
+** and floating-point type variables and associated intrinsic functions.
 */
 
-#define DOUBLE_PRECISION
+#ifdef SINGLE_PRECISION
+# ifdef OUT_DOUBLE
+#   undef OUT_DOUBLE
+# endif
+# ifndef RST_SINGLE
+#   define RST_SINGLE
+# endif
+#else
+# define DOUBLE_PRECISION
+#endif
 
 /*
 ** Turn ON masking when wetting and drying is activated.
@@ -188,12 +208,24 @@
 #endif
 
 /*
+** Single intrinsic Fortran functions.
+*/
+
+#ifdef SINGLE_PRECISION
+# define DSIGN SIGN
+#endif
+
+/*
 ** Set 4DVAR sensitivity switch.
 */
 
-#if defined W4DPSAS_SENSITIVITY || \
+#if defined W4DPSAS_SENSITIVITY || defined W4DPSAS_FCT_SENSITIVITY || \
     defined W4DVAR_SENSITIVITY
 # define SENSITIVITY_4DVAR
+#endif
+
+#if defined W4DPSAS && defined OBS_SPACE
+# undef OBS_SPACE
 #endif
 
 /*
@@ -241,65 +273,6 @@
     (defined CORRELATION     || defined SANITY_CHECK     || \
      defined R_SYMMETRY)
 # define ANA_PERTURB
-#endif
-
-/*
-** Since some of the tracer advection alogorithms are highly nonlinear,
-** it is possible to choose a simpler (less nonlinear) horizontal and
-** vertical tracer advection option for the tangent linear, representer
-** and adjoint routines. This is likely to improve the convergence of
-** the 4DVar algorithms. Notice that this strategy still allows us to
-** use highly nonlinear tracer advection schemes in the basic state
-** when running the nonlinear model.
-*/
-
-#if defined TANGENT || defined TL_IOMS || defined ADJOINT
-# if !defined TS_A4HADVECTION_TL       && \
-     !defined TS_C2HADVECTION_TL       && \
-     !defined TS_C4HADVECTION_TL       && \
-     !defined TS_U3HADVECTION_TL
-#  if defined TS_A4HADVECTION
-#   define TS_A4HADVECTION_TL
-#  elif defined TS_C2HADVECTION
-#   define TS_C2HADVECTION_TL
-#  elif defined TS_C4HADVECTION
-#   define TS_C4HADVECTION_TL
-#  elif defined TS_U3HADVECTION
-#   define TS_U3HADVECTION_TL
-#  endif
-# endif
-
-# if !defined TS_A4VADVECTION_TL       && \
-     !defined TS_C2VADVECTION_TL       && \
-     !defined TS_C4VADVECTION_TL       && \
-     !defined TS_SVADVECTION_TL
-#  if defined TS_A4VADVECTION
-#   define TS_A4VADVECTION_TL
-#  elif defined TS_C2VADVECTION
-#   define TS_C2VADVECTION_TL
-#  elif defined TS_C4VADVECTION
-#   define TS_C4VADVECTION_TL
-#  elif defined TS_SVADVECTION
-#   define TS_SVADVECTION_TL
-#  endif
-# endif
-#endif
-
-/*
-** Now, we need a switch the tracer advection schemes that
-** have not adjointed yet.
-*/
-
-#if defined TANGENT || defined TL_IOMS || defined ADJOINT
-# if defined TS_A4HADVECTION_TL || defined TS_C2HADVECTION_TL || \
-     defined TS_C4HADVECTION_TL || defined TS_U3HADVECTION_TL
-#  define TS_HADVECTION_TL
-# endif
-
-# if defined TS_A4VADVECTION_TL || defined TS_C2VADVECTION_TL || \
-     defined TS_C4VADVECTION_TL || defined TS_SVADVECTION_TL
-#  define TS_VADVECTION_TL
-# endif
 #endif
 
 /*
@@ -375,11 +348,14 @@
 **
 */
 
+#if defined GLS_MIXING || defined MY25_MIXING || defined NN_MIXING
+# define TKE_MIXING
+#endif
+
 #if !defined FORWARD_MIXING  && \
     (defined TANGENT         || defined TL_IOMS    || \
      defined ADJOINT)        && \
-    (defined LMD_MIXING      || defined GLS_MIXING || \
-     defined MY25_MIXING)
+    (defined LMD_MIXING      || defined TKE_MIXING)
 # define FORWARD_MIXING
 #endif
 
@@ -387,12 +363,12 @@
 ** Set internal switches for all the 4DVAR schemes.
 */
 
-#if !defined WEAK_CONSTRAINT     && \
-    (defined ARRAY_MODES         || defined CLIPPING            || \
-     defined R_SYMMETRY          || defined TL_W4DPSAS          || \
-     defined TL_W4DVAR           || defined W4DPSAS             || \
-     defined W4DVAR              || defined W4DPSAS_SENSITIVITY || \
-     defined W4DVAR_SENSITIVITY)
+#if !defined WEAK_CONSTRAINT    && \
+    (defined ARRAY_MODES        || defined CLIPPING                || \
+     defined R_SYMMETRY         || defined TL_W4DPSAS              || \
+     defined TL_W4DVAR          || defined W4DPSAS                 || \
+     defined W4DVAR             || defined W4DPSAS_SENSITIVITY     || \
+     defined W4DVAR_SENSITIVITY || defined W4DPSAS_FCT_SENSITIVITY)
 # define WEAK_CONSTRAINT
 #endif
 #if !defined WEAK_CONSTRAINT     && defined RPM_RELAXATION
@@ -420,6 +396,11 @@
 #if !(defined WEAK_CONSTRAINT || defined IS4DVAR_SENSITIVITY) && \
       defined OBS_IMPACT
 # undef OBS_IMPACT
+#endif
+#if !(defined OBS_IMPACT                && \
+      (defined IS4DVAR_SENSITIVITY      || defined W4DPSAS_SENSITIVITY || \
+       defined W4DPSAS_FCT_SENSITIVITY  || defined W4DVAR_SENSITIVITY))
+# undef IMPACT_INNER
 #endif
 
 /*
@@ -501,7 +482,7 @@
 */
 
 #if defined BVF_MIXING || defined LMD_MIXING  || defined LMD_SKPP    || \
-    defined LMD_BKPP   || defined GLS_MIXING  || defined MY25_MIXING
+    defined LMD_BKPP   || defined TKE_MIXING
 # define BV_FREQUENCY
 #endif
 
@@ -542,9 +523,10 @@
 */
 
 #if defined BIO_FENNEL  || defined ECOSIM      || \
-    defined NEMURO      || defined NPZD_FRANKS || \
-    defined NPZD_IRON   || defined NPZD_POWELL || \
-    defined RED_TIDE    || defined BIO_GOANPZ  || \
+    defined HYPOXIA_SRM || defined NEMURO      || \
+    defined NPZD_FRANKS || defined NPZD_IRON   || \
+    defined NPZD_POWELL || defined RED_TIDE    || \
+    defined BIO_GOANPZ  || \
     defined BIO_UMAINE  || defined BEST_NPZ
 # define BIOLOGY
 #endif
@@ -556,7 +538,9 @@
 #ifdef FILTERED
 # define AVERAGES
 # undef  FILTRIM            /* define for fewer time-filtered fields */
-# define FILTERED_RST       /* define if use restart files for time-filtering */
+# ifndef ARCTIC
+#  define FILTERED_RST       /* define if use restart files for time-filtering */
+# endif
 #endif
 
 /*
@@ -571,16 +555,31 @@
 ** Define internal option to couple to other models.
 **
 */
-#if defined WRF_COUPLING
-# define AIR_OCEAN
+
+#if defined COAMPS_COUPLING || defined REGCM_COUPLING || \
+    defined WRF_COUPLING
+# define ATM_COUPLING
+# ifndef FRC_COUPLING
+#  define FRC_COUPLING
+# endif
 #endif
 
-#if defined REFDIF_COUPLING || defined SWAN_COUPLING
-# define WAVES_OCEAN
+#if defined CICE_COUPLING
+# define ICE_COUPLING
 #endif
 
-#if defined AIR_OCEAN || defined WAVES_OCEAN
+#if defined REFDIF_COUPLING || defined SWAN_COUPLING || \
+    defined WAM_COUPLING
+# define WAV_COUPLING
+#endif
+
+#if defined ATM_COUPLING || defined DATA_COUPLING || \
+    defined ICE_COUPLING || defined WAV_COUPLING
 # define MODEL_COUPLING
+#endif
+
+#if defined MODEL_COUPLING && defined ESMF_LIB
+# define REGRESS_STARTCLOCK
 #endif
 
 /*
@@ -598,8 +597,8 @@
 ** Define internal option to process wave data.
 */
 
-#if defined BBL_MODEL   || defined NEARSHORE || \
-    defined WAVES_OCEAN
+#if defined BBL_MODEL    || defined NEARSHORE || \
+    defined WAV_COUPLING
 # define WAVES_DIR
 #endif
 
@@ -609,35 +608,35 @@
 # define WAVES_UB
 #endif
 
-#if (defined BBL_MODEL        && !defined WAVES_UB) ||  \
+#if (defined BBL_MODEL        && !defined WAVES_UB)           || \
      defined NEARSHORE        || \
      defined ZOS_HSIG         || defined COARE_TAYLOR_YELLAND || \
-     defined BEDLOAD_SOULSBY  || defined WAVES_OCEAN
+     defined BEDLOAD_SOULSBY  || defined WAV_COUPLING
 # define WAVES_HEIGHT
 #endif
 
-#if defined NEARSHORE || defined BEDLOAD_SOULSBY || \
-    defined WAVES_OCEAN
+#if defined NEARSHORE    || defined BEDLOAD_SOULSBY || \
+    defined WAV_COUPLING
 # define WAVES_LENGTH
 #endif
 
 #if (!defined DEEPWATER_WAVES      && \
      (defined COARE_TAYLOR_YELLAND || defined COARE_OOST)) || \
       defined NEARSHORE_MELLOR     || \
-      defined BEDLOAD_SOULSBY      || defined WAVES_OCEAN
+      defined BEDLOAD_SOULSBY      || defined WAV_COUPLING
 # define WAVES_LENGTH
 #endif
 
 #if defined COARE_TAYLOR_YELLAND   || defined COARE_OOST || \
-    defined WAVES_OCEAN
+    defined WAV_COUPLING
 # define WAVES_TOP_PERIOD
 #endif
 
-#if defined BBL_MODEL || defined WAVES_OCEAN
+#if defined BBL_MODEL || defined WAV_COUPLING
 # define WAVES_BOT_PERIOD
 #endif
 
-#if !defined WAVES_OCEAN     && \
+#if !defined WAV_COUPLING    && \
    ((defined BULK_FLUXES     && defined COARE_TAYLOR_YELLAND) || \
     (defined BULK_FLUXES     && defined COARE_OOST)           || \
      defined SVENDSEN_ROLLER || defined TKE_WAVEDISS          || \
@@ -670,37 +669,47 @@
 #  endif
 # endif
 # if !defined ANA_BTFLUX   || \
-    (!defined AIR_OCEAN    && \
+    (!defined FRC_COUPLING && \
      !defined BULK_FLUXES  && !defined ANA_SMFLUX)   || \
-    (!defined BULK_FLUXES  && !defined ANA_STFLUX)   || \
+    (!defined FRC_COUPLING && \
+     !defined BULK_FLUXES  && !defined ANA_STFLUX)   || \
     ( defined BIOLOGY      && !defined ANA_SPFLUX)   || \
     ( defined BIOLOGY      && !defined ANA_BPFLUX)   || \
-    ( defined BULK_FLUXES  && !defined LONGWAVE      && \
-     !defined ANA_LRFLUX)                            || \
-    ( defined BULK_FLUXES  && !defined ANA_PAIR)     || \
-    ( defined BULK_FLUXES  && !defined ANA_TAIR)     || \
-    ( defined BULK_FLUXES  && !defined ANA_HUMIDITY) || \
-    ( defined BULK_FLUXES  && !defined ANA_CLOUD)    || \
-    ( defined BULK_FLUXES  && !defined ANA_RAIN)     || \
-    ( defined BULK_FLUXES  && !defined ANA_WINDS)    || \
-    ( defined BULK_FLUXES  && !defined ANA_SRFLUX)   || \
-    ( defined LMD_SKPP     && !defined ANA_SRFLUX)   || \
-      defined RED_TIDE     || \
-    ( defined SALINITY     && !defined ANA_SSFLUX    && \
+    (!defined FRC_COUPLING && !defined ANA_LRFLUX    && \
+      defined BULK_FLUXES  && !defined LONGWAVE)     || \
+    (!defined FRC_COUPLING && \
+      defined BULK_FLUXES  && !defined ANA_PAIR)     || \
+    (!defined FRC_COUPLING && \
+      defined BULK_FLUXES  && !defined ANA_TAIR)     || \
+    (!defined FRC_COUPLING && \
+      defined BULK_FLUXES  && !defined ANA_HUMIDITY) || \
+    (!defined FRC_COUPLING && \
+      defined BULK_FLUXES  && !defined ANA_CLOUD)    || \
+    (!defined FRC_COUPLING && \
+      defined BULK_FLUXES  && !defined ANA_RAIN)     || \
+    (!defined FRC_COUPLING && \
+      defined BULK_FLUXES  && !defined ANA_WINDS)    || \
+    (!defined FRC_COUPLING && \
+      defined BULK_FLUXES  && !defined ANA_SRFLUX)   || \
+    (!defined FRC_COUPLING && \
+      defined LMD_SKPP     && !defined ANA_SRFLUX)   || \
+    (!defined FRC_COUPLING && \
+      defined RED_TIDE)    || \
+    (!defined FRC_COUPLING && \
+      defined SALINITY     && !defined ANA_SSFLUX    && \
      (defined BULK_FLUXES  && !defined EMINUSP))     || \
-    ( defined SOLAR_SOURCE && !defined ANA_SRFLUX)   || \
-    ( defined SSH_TIDES    || defined UV_TIDES)      || \
+    (!defined FRC_COUPLING && \
+      defined SOLAR_SOURCE && !defined ANA_SRFLUX)   || \
     ( defined BBL_MODEL    && (!defined ANA_WWAVE    && \
-     !defined WAVES_OCEAN))                          || \
+     !defined WAV_COUPLING))                         || \
     ( defined SEDIMENT     && !defined ANA_SPFLUX)   || \
     ( defined SEDIMENT     && !defined ANA_BPFLUX)   || \
     ( defined WAVE_DATA    && (!defined ANA_WWAVE    && \
-     !defined WAVES_OCEAN))
+     !defined WAV_COUPLING))
 #  define FRC_FILE
 # endif
 #else
-# if !defined ANA_SMFLUX   || \
-    ( defined  SSH_TIDES   || defined UV_TIDES)
+# if(!defined FRC_COUPLING && !defined ANA_SMFLUX)
 #  define FRC_FILE
 # endif
 #endif
@@ -758,7 +767,8 @@
 */
 
 #if (defined BULK_FLUXES && defined LONGWAVE) || defined ECOSIM || \
-    (defined ANA_SRFLUX  && defined ALBEDO_CLOUD)
+    (defined ANA_SRFLUX  && defined ALBEDO_CLOUD) || \
+    defined ALBEDO_DIRDIFF
 # define CLOUDS
 #endif
 #if !defined CLOUDS && defined ANA_CLOUD
@@ -769,9 +779,19 @@
 ** Check for calling albedo function
 */
 
-#if defined ALBEDO_CLOUD   || defined ALBEDO_CSIM \
-  || defined ALBEDO_CURVE  || defined ALBEDO_FILE || defined ANA_ALBEDO
+#if defined ALBEDO_CLOUD   || defined ALBEDO_DIRDIFF || \
+    defined ALBEDO_CSIM || defined ALBEDO_CURVE  || \
+    defined ALBEDO_FILE || defined ANA_ALBEDO
 # define ALBEDO
+#endif
+
+/*
+** Activate CCSM albedo is using CCSM treatment of shortwave
+** interactions with ice/snow
+*/
+
+#if defined CCSM_ICE_SHORTWAVE
+# define ALBEDO_CSIM
 #endif
 
 /*
@@ -784,6 +804,11 @@
 #   undef DIAGNOSTICS_TS
 # endif
 #endif
+#if defined DIAGNOSTICS_BIO && \
+  !(defined BIO_FENNEL      || defined HYPOXIA_SRM || defined ECOSIM || \
+    defined BIO_COBALT)
+#  undef DIAGNOSTICS_BIO
+#endif
 #if defined DIAGNOSTICS_BIO || defined DIAGNOSTICS_TS || \
     defined DIAGNOSTICS_UV
 # define DIAGNOSTICS
@@ -793,55 +818,29 @@
 ** Check if any analytical expression is defined.
 */
 
-#if defined ANA_BIOLOGY    || defined ANA_BPFLUX     || \
-    defined ANA_BSFLUX     || defined ANA_BTFLUX     || \
-    defined ANA_CLOUD      || defined ANA_DIAG       || \
-    defined ANA_DQDSST     || defined ANA_DRAG       || \
-    defined ANA_FSOBC      || defined ANA_GRID       || \
-    defined ANA_HUMIDITY   || defined ANA_INITIAL    || \
-    defined ANA_M2CLIMA    || defined ANA_M2OBC      || \
-    defined ANA_M3CLIMA    || defined ANA_M3OBC      || \
-    defined ANA_MASK       || defined ANA_NUDGCOEF   || \
-    defined ANA_PAIR       || defined ANA_PASSIVE    || \
-    defined ANA_PERTURB    || defined ANA_PSOURCE    || \
-    defined ANA_RAIN       || defined ANA_SEDIMENT   || \
-    defined ANA_SMFLUX     || defined ANA_SPFLUX     || \
-    defined ANA_SPINNING   || defined ANA_SPONGE     || \
-    defined ANA_SRFLUX     || defined ANA_SSFLUX     || \
-    defined ANA_SSH        || defined ANA_SSS        || \
-    defined ANA_SST        || defined ANA_STFLUX     || \
-    defined ANA_TAIR       || defined ANA_TCLIMA     || \
-    defined ANA_TOBC       || defined ANA_VMIX       || \
-    defined ANA_WINDS      || defined ANA_WWAVE      || \
-    defined DIFF_GRID      || defined VISC_GRID
+#if defined ANA_BIOLOGY    || defined ANA_BPFLUX      || \
+    defined ANA_BSFLUX     || defined ANA_BTFLUX      || \
+    defined ANA_CLOUD      || defined ANA_DIAG        || \
+    defined ANA_DQDSST     || defined ANA_DRAG        || \
+    defined ANA_FSOBC      || defined ANA_GRID        || \
+    defined ANA_HUMIDITY   || defined ANA_INITIAL     || \
+    defined ANA_M2CLIMA    || defined ANA_M2OBC       || \
+    defined ANA_M3CLIMA    || defined ANA_M3OBC       || \
+    defined ANA_MASK       || defined ANA_NUDGCOEF    || \
+    defined ANA_PAIR       || defined ANA_PASSIVE     || \
+    defined ANA_PERTURB    || defined ANA_PSOURCE     || \
+    defined ANA_RAIN       || defined ANA_RESPIRATION || \
+    defined ANA_SEDIMENT   || defined ANA_SMFLUX      || \
+    defined ANA_SPFLUX     || defined ANA_SPINNING    || \
+    defined ANA_SPONGE     || defined ANA_SRFLUX      || \
+    defined ANA_SSFLUX     || defined ANA_SSH         || \
+    defined ANA_SSS        || defined ANA_SST         || \
+    defined ANA_STFLUX     || defined ANA_TAIR        || \
+    defined ANA_TCLIMA     || defined ANA_TOBC        || \
+    defined ANA_VMIX       || defined ANA_WINDS       || \
+    defined ANA_WWAVE      || defined DIFF_GRID       || \
+    defined VISC_GRID
 # define ANALYTICAL
-#endif
-
-/*
-** If splitting 3rd-order upstream bias horizontal advection of
-** tracer, activate other needed flags.
-*/
-
-#ifdef TS_U3ADV_SPLIT
-# define DIFF_3DCOEF
-# ifdef TS_U3HADVECTION
-#  undef TS_U3HADVECTION
-# endif
-# ifndef TS_C4HADVECTION
-#  define TS_C4HADVECTION
-# endif
-# ifndef TS_C4VADVECTION
-#  define TS_C4VADVECTION
-# endif
-# ifndef TS_DIF4
-#  define TS_DIF4
-# endif
-# ifdef TS_DIF2
-#  undef TS_DIF2
-# endif
-# ifdef TS_SMAGORINSKY
-#  undef TS_SMAGORINSKY
-# endif
 #endif
 
 /*
@@ -874,4 +873,20 @@
 #endif
 #if !defined VISC_3DCOEF && defined UV_SMAGORINSKY
 # define VISC_3DCOEF
+#endif
+
+/*
+** When you don't know if it's in or out.
+*/
+
+#if defined PARALLEL_IN || defined PARALLEL_OUT
+# define PARALLEL_IO
+#endif
+
+/*
+** OFFLINE
+*/
+
+#if defined OFFLINE_FLOATS || defined OFFLINE_BIOLOGY
+# define OFFLINE
 #endif

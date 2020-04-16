@@ -38,7 +38,7 @@
 # include "tile.h"
 
 # ifdef PROFILE
-      CALL wclock_on (ng, iADM, 9)
+      CALL wclock_on (ng, iADM, 9, __LINE__, __FILE__)
 # endif
       CALL ad_step2d_tile (ng, tile,                                    &
      &                     LBi, UBi, LBj, UBj, N(ng),                   &
@@ -137,7 +137,7 @@
      &                     OCEAN(ng) % vbar,       OCEAN(ng) % ad_vbar, &
      &                     OCEAN(ng) % zeta,       OCEAN(ng) % ad_zeta)
 # ifdef PROFILE
-      CALL wclock_off (ng, iADM, 9)
+      CALL wclock_off (ng, iADM, 9, __LINE__, __FILE__)
 # endif
       RETURN
       END SUBROUTINE ad_step2d
@@ -222,6 +222,7 @@
 !
       USE mod_param
       USE mod_clima
+      USE mod_ncparam
       USE mod_scalars
 # if defined SEDIMENT_NOT_YET && defined SED_MORPH_NOT_YET
       USE mod_sediment

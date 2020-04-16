@@ -4,7 +4,7 @@
 !
 !svn $Id$
 !================================================== Hernan G. Arango ===
-!  Copyright (c) 2002-2016 The ROMS/TOMS Group                         !
+!  Copyright (c) 2002-2020 The ROMS/TOMS Group                         !
 !    Licensed under a MIT/X style license                              !
 !    See License_ROMS.txt                                              !
 !=======================================================================
@@ -29,7 +29,11 @@
       USE nf_fwrite2d_mod, ONLY : nf_fwrite2d
 # ifdef SOLVE3D
       USE nf_fwrite3d_mod, ONLY : nf_fwrite3d
+#  ifdef ECOSIM
+      USE nf_fwrite4d_mod, ONLY : nf_fwrite4d
+#  endif
 # endif
+      USE strings_mod,     ONLY : FoundError
 !
       implicit none
 !
@@ -47,7 +51,7 @@
       real(r8) :: dtBIO
 # endif
 !
-      SourceFile='wrt_diags.F'
+      SourceFile=__FILE__
 !
       LBi=LBOUND(GRID(ng)%h,DIM=1)
       UBi=UBOUND(GRID(ng)%h,DIM=1)
@@ -58,7 +62,8 @@
 !  Write out time-averaged diagnostic fields when appropriate.
 !-----------------------------------------------------------------------
 !
-      if (exit_flag.ne.NoError) RETURN
+      if (FoundError(exit_flag, NoError, __LINE__,                      &
+     &               __FILE__)) RETURN
 !
 !  Set grid type factor to write full (gfactor=1) fields or water
 !  points (gfactor=-1) fields only.
@@ -72,7 +77,7 @@
 !  Set time and time-record index.
 !
       DIA(ng)%Rindex=DIA(ng)%Rindex+1
-      Fcount=DIA(ng)%Fcount
+      Fcount=DIA(ng)%load
       DIA(ng)%Nrec(Fcount)=DIA(ng)%Nrec(Fcount)+1
 !
 !  Write out averaged time.
@@ -82,7 +87,8 @@
      &                      (/DIA(ng)%Rindex/), (/1/),                  &
      &                      ncid = DIA(ng)%ncid,                        &
      &                      varid = DIA(ng)%Vid(idtime))
-      IF (exit_flag.ne.NoError) RETURN
+      IF (FoundError(exit_flag, NoError, __LINE__,                      &
+     &               __FILE__)) RETURN
 
 # ifdef DIAGNOSTICS_UV
 !
@@ -102,7 +108,8 @@
 #  endif
      &                       DIAGS(ng) % DiaU2d(:,:,ivar),              &
      &                       SetFillVal = .FALSE.)
-          IF (status.ne.nf90_noerr) THEN
+          IF (FoundError(status, nf90_noerr, __LINE__,                  &
+     &                   __FILE__)) THEN
             IF (Master) THEN
               WRITE (stdout,10) TRIM(Vname(1,ifield)), DIA(ng)%Rindex
             END IF
@@ -125,7 +132,8 @@
 #  endif
      &                       DIAGS(ng) % DiaV2d(:,:,ivar),              &
      &                       SetFillVal = .FALSE.)
-          IF (status.ne.nf90_noerr) THEN
+          IF (FoundError(status, nf90_noerr, __LINE__,                  &
+     &                   __FILE__)) THEN
             IF (Master) THEN
               WRITE (stdout,10) TRIM(Vname(1,ifield)), DIA(ng)%Rindex
             END IF
@@ -154,7 +162,8 @@
 #   endif
      &                       DIAGS(ng) % DiaU3d(:,:,:,ivar),            &
      &                       SetFillVal = .FALSE.)
-          IF (status.ne.nf90_noerr) THEN
+          IF (FoundError(status, nf90_noerr, __LINE__,                  &
+     &                   __FILE__)) THEN
             IF (Master) THEN
               WRITE (stdout,10) TRIM(Vname(1,ifield)), DIA(ng)%Rindex
             END IF
@@ -177,7 +186,8 @@
 #   endif
      &                       DIAGS(ng) % DiaV3d(:,:,:,ivar),            &
      &                       SetFillVal = .FALSE.)
-          IF (status.ne.nf90_noerr) THEN
+          IF (FoundError(status, nf90_noerr, __LINE__,                  &
+     &                   __FILE__)) THEN
             IF (Master) THEN
               WRITE (stdout,10) TRIM(Vname(1,ifield)), DIA(ng)%Rindex
             END IF
@@ -212,7 +222,8 @@
 #  endif
      &                         DIAGS(ng) % DiaTrc(:,:,:,itrc,ivar),     &
      &                         SetFillVal = .FALSE.)
-            IF (status.ne.nf90_noerr) THEN
+            IF (FoundError(status, nf90_noerr, __LINE__,                &
+     &                     __FILE__)) THEN
               IF (Master) THEN
                 WRITE (stdout,10) TRIM(Vname(1,ifield)), DIA(ng)%Rindex
               END IF
@@ -224,7 +235,7 @@
         END DO
       END DO
 # endif
-# if defined DIAGNOSTICS_BIO
+# ifdef DIAGNOSTICS_BIO
 !
 !  Write out 2D biological diagnostic fields.
 !
@@ -248,7 +259,8 @@
 #  endif
      &                       DIAGS(ng) % DiaBio2d(:,:,ivar),            &
      &                       SetFillVal = .FALSE.)
-          IF (status.ne.nf90_noerr) THEN
+          IF (FoundError(status, nf90_noerr, __LINE__,                  &
+     &                   __FILE__)) THEN
             IF (Master) THEN
               WRITE (stdout,10) TRIM(Vname(1,ifield)), DIA(ng)%Rindex
             END IF
@@ -258,6 +270,7 @@
           END IF
         END IF
       END DO
+#  if defined BIO_FENNEL
 !
 !  Write out 3D biological diagnostic fields.
 !
@@ -270,12 +283,13 @@
      &                       DIA(ng)%Vid(ifield),                       &
      &                       DIA(ng)%Rindex, gtype,                     &
      &                       LBi, UBi, LBj, UBj, 1, N(ng), scale,       &
-#  ifdef MASKING
+#   ifdef MASKING
      &                       GRID(ng) % rmask,                          &
-#  endif
+#   endif
      &                       DIAGS(ng) % DiaBio3d(:,:,:,ivar),          &
      &                       SetFillVal = .FALSE.)
-          IF (status.ne.nf90_noerr) THEN
+          IF (FoundError(status, nf90_noerr, __LINE__,                  &
+     &                   __FILE__)) THEN
             IF (Master) THEN
               WRITE (stdout,10) TRIM(Vname(1,ifield)), DIA(ng)%Rindex
             END IF
@@ -285,13 +299,75 @@
           END IF
         END IF
       END DO
+#  elif defined ECOSIM
+!
+!  Write out 3D biological diagnostic fields.
+!
+      dtBIO=dt(ng)*sec2day/REAL(BioIter(ng),r8)
+      DO ivar=1,NDbio3d
+        ifield=iDbio3(ivar)
+        IF (Dout(ifield,ng)) THEN
+          scale=1.0_r8                               ! micromole m-2 s-1
+          gtype=gfactor*l3dvar
+          status=nf_fwrite3d(ng, iNLM, DIA(ng)%ncid,                    &
+     &                       DIA(ng)%Vid(ifield),                       &
+     &                       DIA(ng)%Rindex, gtype,                     &
+     &                       LBi, UBi, LBj, UBj, 1, NDbands, scale,     &
+#   ifdef MASKING
+     &                       GRID(ng) % rmask,                          &
+#   endif
+     &                       DIAGS(ng) % DiaBio3d(:,:,:,ivar),          &
+     &                       SetFillVal = .FALSE.)
+          IF (FoundError(status, nf90_noerr, __LINE__,                  &
+     &                   __FILE__)) THEN
+            IF (Master) THEN
+              WRITE (stdout,10) TRIM(Vname(1,ifield)), DIA(ng)%Rindex
+            END IF
+            exit_flag=3
+            ioerror=status
+            RETURN
+          END IF
+        END IF
+      END DO
+!
+!  Write out 4D biological diagnostic fields.
+!
+      dtBIO=dt(ng)*sec2day/REAL(BioIter(ng),r8)
+      DO ivar=1,NDbio4d
+        ifield=iDbio4(ivar)
+        IF (Dout(ifield,ng)) THEN
+            scale=1.0_r8                 ! micromole m-2 s-1 or m-1
+          gtype=gfactor*l4dvar
+          status=nf_fwrite4d(ng, iNLM, DIA(ng)%ncid,                    &
+     &                       DIA(ng)%Vid(ifield),                       &
+     &                       DIA(ng)%Rindex, gtype,                     &
+     &                       LBi, UBi, LBj, UBj, 1, N(ng), 1, NDbands,  &
+     &                       scale,                                     &
+#   ifdef MASKING
+     &                       GRID(ng) % rmask,                          &
+#   endif
+     &                       DIAGS(ng) % DiaBio4d(:,:,:,:,ivar),        &
+     &                       SetFillVal = .FALSE.)
+          IF (FoundError(status, nf90_noerr, __LINE__,                  &
+     &                   __FILE__)) THEN
+            IF (Master) THEN
+              WRITE (stdout,10) TRIM(Vname(1,ifield)), DIA(ng)%Rindex
+            END IF
+            exit_flag=3
+            ioerror=status
+            RETURN
+          END IF
+        END IF
+      END DO
+#  endif
 # endif
 !
 !  Synchronize time-average NetCDF file to disk to allow other processes
 !  to access data immediately after it is written.
 !
       CALL netcdf_sync (ng, iNLM, DIA(ng)%name, DIA(ng)%ncid)
-      IF (exit_flag.ne.NoError) RETURN
+      IF (FoundError(exit_flag, NoError, __LINE__,                      &
+     &               __FILE__)) RETURN
 
 # ifdef NESTING
       IF (Master) WRITE (stdout,20) DIA(ng)%Rindex, ng
@@ -301,11 +377,11 @@
 !
   10  FORMAT (/,' WRT_DIAGS - error while writing variable: ',a,/,13x,  &
      &        'into diagnostics NetCDF file for time record: ',i4)
-  20  FORMAT (6x,'WRT_DIAGS - wrote diagnostics fields into time ',     &
+  20  FORMAT (6x,'WRT_DIAGS   - wrote diagnostics fields',t58,          &
 # ifdef NESTING
-     &        'record = ',t72,i7.7,2x,i2.2)
+     &        'in record = ',i7.7,t92,i2.2)
 # else
-     &        'record = ',t72,i7.7)
+     &        'in record = ',i7.7)
 # endif
 #else
       SUBROUTINE wrt_diags

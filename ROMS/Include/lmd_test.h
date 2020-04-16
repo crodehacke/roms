@@ -1,7 +1,7 @@
 /*
 ** svn $Id$
 *******************************************************************************
-** Copyright (c) 2002-2016 The ROMS/TOMS Group                               **
+** Copyright (c) 2002-2020 The ROMS/TOMS Group                               **
 **   Licensed under a MIT/X style license                                    **
 **   See License_ROMS.txt                                                    **
 *******************************************************************************
@@ -9,7 +9,7 @@
 ** Options for K-Profile Parameterization Test.
 **
 ** Application flag:   LMD_TEST
-** Input script:       ocean_lmd_test.in
+** Input script:       roms_lmd_test.in
 */
 
 #define UV_ADV
@@ -20,8 +20,6 @@
 #define DJ_GRADPS
 #define SPLINES_VDIFF
 #define SPLINES_VVISC
-#define TS_A4HADVECTION
-#define TS_A4VADVECTION
 #define NONLIN_EOS
 #define SALINITY
 #define AVERAGES

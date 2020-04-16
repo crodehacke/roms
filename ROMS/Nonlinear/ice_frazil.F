@@ -4,7 +4,7 @@
       || defined CICE_MODEL
 !
 !=======================================================================
-!  Copyright (c) 2002-2016 The ROMS/TOMS Group                         !
+!  Copyright (c) 2002-2020 The ROMS/TOMS Group                         !
 !================================================== Hernan G. Arango ===
 !                                                                      !
 !  This routine computes the frazil ice growth in the water when the
@@ -38,7 +38,7 @@
 # include "tile.h"
 !
 # ifdef PROFILE
-      CALL wclock_on (ng, iNLM, 51)
+      CALL wclock_on (ng, iNLM, 80, __LINE__, __FILE__)
 # endif
 !
       CALL ice_frazil_tile (ng, tile,                                   &
@@ -65,7 +65,7 @@
 # endif
      &                      ICE(ng) % wfr)
 # ifdef PROFILE
-      CALL wclock_off (ng, iNLM, 51)
+      CALL wclock_off (ng, iNLM, 80, __LINE__, __FILE__)
 # endif
       RETURN
       END SUBROUTINE ice_frazil
@@ -274,7 +274,7 @@
               t(i,j,k,nnew,isalt) = t(i,j,k,nnew,isalt)               &
      &              + (salref-salice)*potice*cp_over_lhfusion/Hz(i,j,k)
 !*** jump out if done with surface layer
-              IF (z_w(i,j,N(ng))-z_w(i,j,k) > bl_thick) EXIT
+              IF (z_w(i,j,N(ng))-z_w(i,j,k-1) > bl_thick) EXIT
             END DO
 #  if defined WET_DRY || defined MASKING
           END IF
@@ -300,7 +300,7 @@
                   print *, 'trouble in ice_frazil', i, j, k,            &
      &             t(i,j,k,nnew,itemp), t(i,j,k,nnew,isalt),            &
      &             t_fr, wfr(i,j), gamma_k, Hz(i,j,k)
-                  exit_flag = 9
+                  exit_flag = 10
                 END IF
                 wfr(i,j) = wfr(i,j) + gamma_k * Hz(i,j,k) *             &
      &                    (rho0 + rho(i,j,k) ) / ice_dens
@@ -339,7 +339,7 @@
             print *, 'trouble in ice_frazil', i, j,                     &
      &         t(i,j,N(ng),nnew,itemp), t(i,j,N(ng),nnew,isalt),        &
      &         wfr(i,j), gamma_k, Hz(i,j,N(ng))
-            exit_flag = 9
+            exit_flag = 10
           END IF
         END DO
       END DO
@@ -406,7 +406,7 @@
 !              thickness = thickness + dz*fract
               heat = heat + (t(i,j,k,nnew,itemp)-tfr)*dz*fract
             END IF
-            IF (z_w(i,j,N(ng))-z_w(i,j,k) > bl_thick) EXIT
+            IF (z_w(i,j,N(ng))-z_w(i,j,k-1) > bl_thick) EXIT
           END DO
 ! convert units to W/m^2
           wfr(i,j) = (wfr(i,j) - heat)*rhocpr/dt(ng)

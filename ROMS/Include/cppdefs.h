@@ -3,7 +3,7 @@
 **
 ** svn $Id$
 ********************************************************** Hernan G. Arango ***
-** Copyright (c) 2002-2016 The ROMS/TOMS Group                               **
+** Copyright (c) 2002-2020 The ROMS/TOMS Group                               **
 **   Licensed under a MIT/X style license                                    **
 **   See License_ROMS.txt                                                    **
 *******************************************************************************
@@ -53,32 +53,6 @@
 **                                                                           **
 ** OPTIONS associated with tracers equations:                                **
 **                                                                           **
-**   The default horizontal and vertical advection is 4th-order centered.    **
-**                                                                           **
-**   The 3rd-order upstream split advection (TS_U3ADV_SPLIT) can be used     **
-**   to correct for the spurious diapycnal diffusion of the advection        **
-**   operator in terrain-following coordinates. If this is the case, the     **
-**   advection operator is split in advective and diffusive components       **
-**   and several internal flags are activated in "globaldefs.h".  Notice     **
-**   that horizontal and vertical advection of tracer is 4th-order centered  **
-**   plus biharmonic diffusion to correct for spurious diapycnal mixing.     **
-**   The total time-dependent horizontal mixing coefficient are computed     **
-**   in "hmixing.F". It is also recommended to use the rotated mixing        **
-**   tensor along geopotentials (MIX_GEO_TS) for the biharmonic operator.    **
-**                                                                           **
-**   WARNING:  Use the splines vertical advection option (TS_SVADVECTION)    **
-**             only in idealized, high vertical resolution applications.     **
-**                                                                           **
-** TS_U3ADV_SPLIT      use if 3rd-order upstream split tracer advection      **
-** TS_A4HADVECTION     use if 4th-order Akima horizontal advection           **
-** TS_C2HADVECTION     use if 2nd-order centered horizontal advection        **
-** TS_C4HADVECTION     use if 4th-order centered horizontal advection        **
-** TS_MPDATA           use if recursive MPDATA 3D advection                  **
-** TS_U3HADVECTION     use if 3rd-order upstream horiz. advection            **
-** TS_A4VADVECTION     use if 4th-order Akima vertical advection             **
-** TS_C2VADVECTION     use if 2nd-order centered vertical advection          **
-** TS_C4VADVECTION     use if 4th-order centered vertical advection          **
-** TS_SVADVECTION      use if splines vertical advection                     **
 ** TS_DIF2             use to turn ON or OFF harmonic horizontal mixing      **
 ** TS_DIF4             use to turn ON or OFF biharmonic horizontal mixing    **
 ** TS_SMAGORINSKY      use to turn ON or OFF Smagorinsky-like diffusion      **
@@ -103,38 +77,10 @@
 **                                                                           **
 ** LIMIT_STFLX_COOLING use to suppress SST cooling below freezing point      **
 **                                                                           **
-** OPTIONS for MPDATA 3D Advection:                                          **
+** OPTIONS for MPDATA 3D Advection: Hadvection(itrc,ng)%MPDATA and           **
+**                                  Vadvection(itrc,ng)%MPDATA switches      **
 **                                                                           **
 ** TS_MPDATA_LIMIT     use to limit upwind corrector fluxes for stability    **
-**                                                                           **
-** Tracer advection OPTIONS for adjoint-based algorithms:                    **
-**                                                                           **
-**   Some of the tracer advection algorithms are highly nonlinear and        **
-**   may become unstable when running the tangent linear, representer,       **
-**   and adjoint models. This may affect the convergence of the 4DVar        **
-**   data assimilation algorithms. Therefore, it is possible to choose       **
-**   a simpler (less nonlinear) horizontal and vertical tracer advection     **
-**   scheme, if so desired, for the tangent linear, representer and          **
-**   adjoint models. Notice that this strategy still allows us to use        **
-**   highly nonlinear tracer advection schemes in the basic state upon       **
-**   which the tangent linear and adjoint models are linearized. Also,       **
-**   it allows us to use those schemes that have not been adjointed yet,     **
-**   for example, TS_MPDATA.  Recall that basic state trajectory is          **
-**   computed by running the nonlinear model.                                **
-**                                                                           **
-**   The flags below are optional. By default, the same options chosen       **
-**   for the nonlinear model are selected for the tangent linear,            **
-**   representer, and adjoint models.                                        **
-**                                                                           **
-** TS_A4HADVECTION_TL  use if 4th-order Akima horizontal advection           **
-** TS_C2HADVECTION_TL  use if 2nd-order centered horizontal advection        **
-** TS_C4HADVECTION_TL  use if 4th-order centered horizontal advection        **
-** TS_U3HADVECTION_TL  use if 3rd-order upstream horiz. advection            **
-**                                                                           **
-** TS_A4VADVECTION_TL  use if 4th-order Akima vertical advection             **
-** TS_C2VADVECTION_TL  use if 2nd-order centered vertical advection          **
-** TS_C4VADVECTION_TL  use if 4th-order centered vertical advection          **
-** TS_SVADVECTION_TL   use if splines vertical advection                     **
 **                                                                           **
 ** Pressure gradient algorithm OPTIONS:                                      **
 **                                                                           **
@@ -150,6 +96,7 @@
 ** WJ_GRADP            use if weighted density Jacobian (Song,1998)          **
 **                                                                           **
 ** ATM_PRESS           use to impose atmospheric pressure onto sea surface   **
+** PRESS_COMPENSATE    use to compensate for boundary without ATM pressure   **
 **                                                                           **
 ** OPTIONS for surface fluxes formulation using atmospheric boundary layer   **
 ** (Fairall et al, 1996):                                                    **
@@ -174,6 +121,7 @@
 ** EMINUSP_SSH         use if computing changes in SSH due to E-P            **
 ** RUNOFF              use if adding runoff as a second rain field           **
 ** RUNOFF_SSH          use if adjusting zeta based on runoff field           **
+** WIND_MINUS_CURRENT  use if compute effective wind by removing current     **
 **                                                                           **
 ** OPTIONS for wave roughness formulation in bulk fluxes:                    **
 **                                                                           **
@@ -190,6 +138,7 @@
 **   which is a function longitude, latitude and day-of-year.                **
 **                                                                           **
 ** ALBEDO_CLOUD        use if albedo equation for shortwave radiation        **
+** ALBEDO_DIRDIFF      use if albedo function of direct vs. diffuse          **
 ** ALBEDO_CSIM         use if albedo function from CSIM for ice              **
 ** ALBEDO_CURVE        use if albedo function of lat from Large and Yeager   **
 ** ALBEDO_FILE         use if albedo read from a file                        **
@@ -204,7 +153,6 @@
 ** PROFILE             use if time profiling                                 **
 ** AVERAGES            use if writing out NLM time-averaged data             **
 ** AVERAGES2           use if writing out secondary time-averaged data       **
-** HISTORY2            use if writing out secondary history data             **
 ** AVERAGES_DETIDE     use if writing out NLM time-averaged detided fields   **
 ** AD_AVERAGES         use if writing out ADM time-averaged data             **
 ** RP_AVERAGES         use if writing out TLM time-averaged data             **
@@ -213,6 +161,7 @@
 ** DIAGNOSTICS_UV      use if writing out momentum diagnostics               **
 ** DIAGNOSTICS_TS      use if writing out tracer diagnostics                 **
 ** ICESHELF            use if including ice shelf cavities                   **
+** SINGLE_PRECISION    use if single precision arithmetic numerical kernel   **
 ** SPHERICAL           use if analytical spherical grid                      **
 ** STATIONS            use if writing out station data                       **
 ** STATIONS_CGRID      use if extracting data at native C-grid               **
@@ -301,9 +250,12 @@
 ** (activate only one closure):                                              **
 **                                                                           **
 ** BVF_MIXING          use if Brunt-Vaisala frequency mixing                 **
-** GLS_MIXING          use if Generic Length-Scale mixing                    **
+** GLS_MIXING          use if Generic Length-Scale mixing closure            **
 ** MY25_MIXING         use if Mellor/Yamada Level-2.5 closure                **
 ** LMD_MIXING          use if Large et al. (1994) interior closure           **
+**                                                                           **
+** LIMIT_VDIFF         use to impose an upper limit on vertical diffusion    **
+** LIMIT_VVISC         use to impose an upper limit on vertical viscosity    **
 **                                                                           **
 ** OPTIONS for the Generic Length-Scale closure (Warner et al., 2005):       **
 **                                                                           **
@@ -382,6 +334,7 @@
 **                                                                           **
 ** Lateral boundary conditions OPTIONS:                                      **
 **                                                                           **
+** IMPLICIT_NUDGING    use if implicit nudging term in momentum radiation    **
 ** RADIATION_2D        use if tangential phase speed in radiation conditions **
 **                                                                           **
 ** OPTIONS for tidal forcing at open boundaries:                             **
@@ -419,27 +372,35 @@
 ** AD_SENSITIVITY      use if adjoint sensitivity driver                     **
 ** AFT_EIGENMODES      use if adjoint finite time eingenmodes driver         **
 ** ARRAY_MODES         use if W4DVAR representer matrix array modes          **
+** BEOFS_ONLY          use to compute EOFs of background error covariance    **
+** BGQC                use if background quality control of observations     **
+** BNORM               use if Background norm for Hessian singular vectors   **
 ** CLIPPING            use if W4DVAR representer matrix clipping analysis    **
 ** CORRELATION         use if background-error correlation model driver      **
 ** ENSEMBLE            use if ensemble prediction driver                     **
+** EVOLVED_LCZ         use to Compute 4DVar evolved Hessian singular vectors **
 ** FORCING_SV          use if forcing singular vectors driver                **
 ** FT_EIGENMODES       use if finite time eingenmodes driver: normal modes   **
-** INNER_PRODUCT       use if tangent linear and adjoint inner product check **
-** IS4DVAR             use if incremental 4DVar data assimilation            **
-** IS4DVAR_SENSITIVITY use if I4DVar observations sensitivity driver         **
+** GEOPOTENTIAL_HCONV  use if horizontal convolutions along geopotentials    **
 ** HESSIAN_FSV         use if Hessian forcing singular vectors               **
 ** HESSIAN_SO          use if Hessian stochastic optimals                    **
 ** HESSIAN_SV          use if Hessian singular vectors                       **
+** INNER_PRODUCT       use if tangent linear and adjoint inner product check **
+** IS4DVAR             use if incremental 4DVar data assimilation            **
+** IS4DVAR_SENSITIVITY use if I4DVar observations sensitivity driver         **
+** LCZ_FINAL           use to compute 4DVar Hessian singular vectors         **
 ** OPT_OBSERVATIONS    use if optimal observations driver                    **
 ** OPT_PERTURBATION    use if optimal perturbations driver, singular vectors **
 ** PICARD_TEST         use if representer tangent linear model test          **
 ** PSEUDOSPECTRA       use if pseudospectra of tangent linear resolvant      **
 ** R_SYMMETRY          use if representer matrix symmetry test               **
+** RPCG                use if Restricted B-preconditioned Lanczos solver     **
 ** RPM_DRIVER          use if generic representers model driver              **
 ** SANITY_CHECK        use if tangent linear and adjoint codes sanity check  **
 ** SO_SEMI             use if stochastic optimals driver, semi-norm          **
 ** SO_TRACE            use if stochastic optimals, randomized trace          **
 ** STOCHASTIC_OPT      use if stochastic optimals                            **
+** TIME_CONV           use if weak-constraint 4DVar time convolutions        **
 ** TLM_CHECK           use if tangent linear model linearization check       **
 ** TLM_DRIVER          use if generic tangent linear model driver            **
 ** W4DPSAS             use if weak constraint 4DPSAS data assimilation       **
@@ -463,6 +424,7 @@
 ** FORWARD_WRITE       use if writing out forward solution, basic state      **
 ** FORWARD_READ        use if reading in  forward solution, basic state      **
 ** FORWARD_RHS         use if processing forward right-hand-side terms       **
+** IMPACT_INNER        use to write observations impacts for each inner loop **
 ** IMPLICIT_VCONV      use if implicit vertical convolution algorithm        **
 ** IMPULSE             use if processing adjoint impulse forcing             **
 ** MINRES              use if Minimal Residual Method for 4DVar minimization **
@@ -475,6 +437,7 @@
 ** POSTERIOR_ERROR_I   use if initial posterior analysis error covariance    **
 ** RECOMPUTE_4DVAR     use if recomputing 4DVar in analysis algorithms       **
 ** RPM_RELAXATION      use if Picard iterations, Diffusive Relaxation of RPM **
+** SKIP_NLM            use to skip running NLM, reading NLM trajectory       **
 ** SO_SEMI_WHITE       use to activate SO semi norm white/red noise processes**
 ** STOCH_OPT_WHITE     use to activate SO white/red noise processes          **
 ** SPLINES_VCONV       use to activate implicit splines vertical convolution **
@@ -507,6 +470,10 @@
 ** JELLY               use if jellyfish                                      **
 ** CLIM_ICE_1D         use if one-D with ice                                 **
 **                                                                           **
+** Hypoxia ecosysten model OPTIONS:                                          **
+**                                                                           **
+** HYPOXIA_SRM         use if Hypoxia Simple Respiration Model               **
+**                                                                           **
 ** NPZD biology model OPTIONS:                                               **
 **                                                                           **
 ** BIO_UMAINE          use if Chai et al. (2002) CoSINE model                **
@@ -520,6 +487,7 @@
 ** Bio-optical EcoSim model OPTIONS:                                         **
 **                                                                           **
 ** ECOSIM              use if bio-optical EcoSim model                       **
+** BIO_OPTICAL         use to compute underwater spectral light properties   **
 **                                                                           **
 ** Nemuro lower trophic level ecosystem model OPTIONS:                       **
 **                                                                           **
@@ -550,21 +518,66 @@
 ** OPTIONS for grid nesting:                                                 **
 **                                                                           **
 ** NESTING             use to activate grid nesting: composite/refinement    **
+** NESTING_DEBUG       use to check mass fluxes conservation in refinement   **
 ** NO_CORRECT_TRACER   use to avoid two-way correction of boundary tracer    **
 ** ONE_WAY             use if one-way nesting in refinement grids            **
 ** TIME_INTERP_FLUX    time interpolate coarse mass flux instead of persist  **
 **                                                                           **
-** OPTIONS for two-way coupling to other models:                             **
+** OPTIONS for coupling to other Earth System Models (ESM) via the Earth     **
+** Modeling Framework (ESMF) or Modeling Coupling Toolkit (MCT) libraries.   **
+** If coupling with ESMF library, it uses the National Unified Operational   **
+** Prediction Capability (NUOPC) layer "cap" files to facilitate exchanges   **
+** with other ESM components.                                                **
 **                                                                           **
+** ESMF_LIB            use if coupling with the ESMF/NUOPC library           **
+** MCT_LIB             use if Coupling with the MCT library                  **
+**                                                                           **
+** CICE_COUPLING       use if coupling to CICE sea ice model                 **
+** COAMPS_COUPLING     use if coupling to COAMPS atmospheric model           **
+** DATA_COUPLING       use if coupling to DATA model                         **
+** EXCLUDE_SPONGE      use if excluding sponge point in export fields        **
+** FRC_COUPLING        use if forcing from Atmopheric or Data model          **
 ** REFDIF_COUPLING     use if coupling to REFDIT wave model                  **
+** REGCM_COUPLING      use if coupling to RegCM atmospheric model            **
 ** SWAN_COUPLING       use if coupling to SWAN wave model                    **
+** TIME_INTERP         use if importing snapshots for time interpolation     **
+** WAM_COUPLING        use if coupling to WAM wave model                     **
 ** WRF_COUPLING        use if coupling to WRF atmospheric model              **
+** WRF_TIMEAVG         use if time-averaged fields over coupling interval    **
 **                                                                           **
 ** Nearshore and shallow water model OPTIONS:                                **
 **                                                                           **
 ** WET_DRY             use to activate wetting and drying                    **
 ** NEARSHORE_MELLOR05  use to activate radiation stress terms (Mellor 2005). **
 ** NEARSHORE_MELLOR08  use to activate radiation stress terms (Mellor 2008). **
+**                                                                           **
+** MPI communication OPTIONS:  The routines "mp_assemble" (used in nesting), **
+**                             "mp_collect" (used in NetCDF I/O and 4D-Var), **
+** and "mp_reduce" (used in global reductions) are coded in "distribution.F" **
+** by either using low-level ("mpi_isend" and "mpi_irecv") or high-level     **
+** ("mpi_allgather" and "mpi_allreduce") MPI calls. The default is to use    **
+** the low-level MPI  calls. The options for routine "mp_boundary" (used to  **
+** process lateral open boundary conditions is either "mpi_allgather" or     **
+** "mpi_allreduce" (default).                                                **
+**                                                                           **
+** The user needs to be aware that the choice of these MPI communication     **
+** routines it will affect performance issue. In some computers, the         **
+** low-level are either slower or faster than the high-level MPI library     **
+** calls. It depends on the computer (cluster) set-up. Some vendors provide  **
+** native MPI libraries fine-tuned for the computer architecture. The        **
+** user needs to find which function option performs better by carrying on   **
+** benchmarks. We provides the following choices:                            **
+**                                                                           **
+** ASSEMBLE_ALLGATHER  use "mpi_allgather" in "mp_assemble"                  **
+** ASSEMBLE_ALLREDUCE  use "mpi_allreduce" in "mp_assemble"                  **
+**                                                                           **
+** BOUNDARY_ALLGATHER  use "mpi_allgather" in "mp_boundary"                  **
+**                                                                           **
+** COLLECT_ALLGATHER   use "mpi_allgather" in "mp_collect"                   **
+** COLLECT_ALLREDUCE   use "mpi_allreduce" in "mp_collect"                   **
+**                                                                           **
+** REDUCE_ALLGATHER    use "mpi_allgather" in "mp_reduce"                    **
+** REDUCE_ALLREDUCE    use "mpi_allreduce" in "mp_reduce"                    **
 **                                                                           **
 ** NetCDF input/output OPTIONS:                                              **
 **                                                                           **
@@ -583,16 +596,14 @@
 ** RST_SINGLE          use if writing single precision restart fields        **
 ** OUT_DOUBLE          use if writing double precision output fields         **
 **                                                                           **
-** Coupling Library OPTIONS:                                                 **
-**                                                                           **
-** ESMF_LIB            use Earth System Modeling Framework Library           **
-** MCT_LIB             use Model Coupling Toolkit Library                    **
-**                                                                           **
 ** OPTION to process 3D data by levels (2D slabs) to reduce memory needs in  **
 ** distributed-memory configurations. This option is convenient for large    **
 ** problems on nodes with limited memory.                                    **
 **                                                                           **
 ** INLINE_2DIO         use if processing 3D IO level by level                **
+**                                                                           **
+** SVN                 use if svn is repository of choice, otherwise         **
+**                     assumes git.                                          **
 **                                                                           **
 ** Sea ice options
 **
@@ -602,6 +613,7 @@
 ** ICE_ALB_EC92        use for albedo computation from Ebert and Curry
 ** ICE_MOMENTUM        use for momentum component
 ** ICE_MOM_BULK        hmmm, some option for ice-water stress computation
+** ICE_DIAGS           use for ice thermodynamic diagnostics
 ** ICE_EVP             use for elastic-viscous-plastic rheology
 ** ICE_I_O             use for shortwave going to heat ice
 ** ICE_SHOREFAST       use for a simple shorefast-ice algorithm (Budgell)

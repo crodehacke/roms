@@ -1,7 +1,7 @@
 /*
 ** svn $Id$
 *******************************************************************************
-** Copyright (c) 2002-2016 The ROMS/TOMS Group                               **
+** Copyright (c) 2002-2020 The ROMS/TOMS Group                               **
 **   Licensed under a MIT/X style license                                    **
 **   See License_ROMS.txt                                                    **
 *******************************************************************************
@@ -9,7 +9,7 @@
 ** Options for Suspended Sediment Test in a Channel.
 **
 ** Application flag:   SED_TEST1
-** Input scripts:      ocean_sed_test1.in
+** Input scripts:      roms_sed_test1.in
 **                     sediment_sed_test1.in
 */
 
@@ -19,8 +19,6 @@
 #define MIX_S_UV
 #define SPLINES_VDIFF
 #define SPLINES_VVISC
-#define TS_U3HADVECTION
-#define TS_C4VADVECTION
 #define TS_DIF4
 #define MIX_S_TS
 #define SALINITY

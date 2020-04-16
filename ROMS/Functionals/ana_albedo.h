@@ -2,7 +2,7 @@
 !
 !! svn $Id$
 !!======================================================================
-!! Copyright (c) 2002-2016 The ROMS/TOMS Group                         !
+!! Copyright (c) 2002-2020 The ROMS/TOMS Group                         !
 !!   Licensed under a MIT/X style license                              !
 !!   See License_ROMS.txt                                              !
 !=======================================================================
@@ -26,10 +26,13 @@
      &                     LBi, UBi, LBj, UBj,                          &
      &                     IminS, ImaxS, JminS, JmaxS,                  &
 # if defined SHORTWAVE && defined ALBEDO_CURVE
-     &                     GRID(ng) % latr,                             &   
+     &                     GRID(ng) % latr,                             &
 # endif
 # ifdef ICE_MODEL
      &                     FORCES(ng) % albedo_ice,                     &
+# endif
+# ifdef ALBEDO_HACK
+     &                     GRID(ng) % mask_albedo,                      &
 # endif
      &                     FORCES(ng) % albedo)
 !
@@ -56,11 +59,15 @@
 # ifdef ICE_MODEL
      &                            albedo_ice,                           &
 # endif
+# ifdef ALBEDO_HACK
+     &                            mask_albedo,                          &
+# endif
      &                            albedo)
 !***********************************************************************
 !
       USE mod_param
       USE mod_scalars
+      USE dateclock_mod,   ONLY : caldate
 !
       USE exchange_2d_mod, ONLY : exchange_r2d_tile
 #ifdef DISTRIBUTE
@@ -81,6 +88,9 @@
       real(r8), intent(out) :: albedo_ice(LBi:,LBj:)
 #  endif
       real(r8), intent(out) :: albedo(LBi:,LBj:)
+#ifdef ALBEDO_HACK
+      real(r8), intent(in) :: mask_albedo(LBi:,LBj:)
+#endif
 #else
 #  if defined SHORTWAVE && defined ALBEDO_CURVE
       real(r8), intent(in) :: latr(LBi:UBi,LBj:UBj)
@@ -89,13 +99,15 @@
       real(r8), intent(out) :: albedo_ice(LBi:UBi,LBj:UBj)
 #  endif
       real(r8), intent(out) :: albedo(LBi:UBi,LBj:UBj)
+#ifdef ALBEDO_HACK
+      real(r8), intent(in) :: mask_albedo(LBi:UBi,LBj:UBj)
+#endif
 #endif
 !
 !  Local variable declarations.
 !
       integer :: i, j
-      integer :: iday, month, year
-      real(r8) :: hour, yday
+      integer :: month
       real(r8), parameter :: alb(12) =                                &
      &           (/ .85, .85, .83, .81, .82, .78,                     &
      &              .64, .69, .84, .85, .85, .85 /)
@@ -107,7 +119,7 @@
 !  Set analytical surface albedo.
 !-----------------------------------------------------------------------
 !
-      CALL caldate(r_date, tdays(ng), year, yday, month, iday, hour)
+      CALL caldate(tdays(ng), mm_i=month)
       DO j=JstrT,JendT
         DO i=IstrT,IendT
 #ifdef ICE_MODEL
@@ -124,6 +136,9 @@
 # endif
 #else
           albedo(i,j)=alb_w
+#endif
+#ifdef ALBEDO_HACK
+          albedo(i,j) = max(albedo(i,j), 0.95*mask_albedo(i,j))
 #endif
         END DO
       END DO

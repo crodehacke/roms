@@ -4,7 +4,7 @@
 !
 !svn $Id$
 !================================================== Hernan G. Arango ===
-!  Copyright (c) 2002-2016 The ROMS/TOMS Group                         !
+!  Copyright (c) 2002-2020 The ROMS/TOMS Group                         !
 !    Licensed under a MIT/X style license                              !
 !    See License_ROMS.txt                                              !
 !=======================================================================
@@ -45,7 +45,7 @@
 #  include "tile.h"
 !
 #  ifdef PROFILE
-      CALL wclock_on (ng, iNLM, 6)
+      CALL wclock_on (ng, iNLM, 6, __LINE__, __FILE__)
 #  endif
       CALL set_vbc_tile (ng, tile,                                      &
      &                   LBi, UBi, LBj, UBj,                            &
@@ -121,10 +121,16 @@
 #  if defined OPTIC_MANIZZA && !defined BIO_COBALT
      &                   FORCES(ng) % chl,                              &
 #  endif
+#  if defined BULK_FLUXES || defined ATM_COUPLING
+     &                   FORCES(ng) % snhflx,                           &
+#  endif
+#  if (defined BULK_FLUXES && defined EMINUSP) || defined ATM_COUPLING
+     &                   FORCES(ng) % EminusP,                          &
+#  endif
      &                   FORCES(ng) % stflx,                            &
      &                   FORCES(ng) % btflx)
 #  ifdef PROFILE
-      CALL wclock_off (ng, iNLM, 6)
+      CALL wclock_off (ng, iNLM, 6, __LINE__, __FILE__)
 #  endif
 
       RETURN
@@ -200,6 +206,12 @@
 #  if defined OPTIC_MANIZZA && !defined BIO_COBALT
      &                         chl,                                     &
 #  endif
+#  if defined BULK_FLUXES || defined ATM_COUPLING
+     &                         snhflx,                                  &
+#  endif
+#  if (defined BULK_FLUXES && defined EMINUSP) || defined ATM_COUPLING
+     &                         EminusP,                                 &
+#  endif
      &                         stflx, btflx)
 !***********************************************************************
 !
@@ -266,6 +278,12 @@
 #   endif
 #   if defined SSSFLX
       real(r8), intent(inout) :: sssflx(LBi:,LBj:)
+#   endif
+#   if defined BULK_FLUXES || defined ATM_COUPLING
+      real(r8), intent(in) :: snhflx(LBi:,LBj:)
+#   endif
+#   if (defined BULK_FLUXES && defined EMINUSP) || defined ATM_COUPLING
+      real(r8), intent(in) :: EminusP(LBi:,LBj:)
 #   endif
 #   if defined ICESHELF
 #    ifdef SHORTWAVE
@@ -339,6 +357,12 @@
 #   if defined SSSFLX
       real(r8), intent(inout) :: sssflx(LBi:UBi,LBj:UBj)
 #   endif
+#   if defined BULK_FLUXES || defined ATM_COUPLING
+      real(r8), intent(in) :: snhflx(LBi:UBi,LBj:UBj)
+#   endif
+#   if (defined BULK_FLUXES && defined EMINUSP) || defined ATM_COUPLING
+      real(r8), intent(in) :: EminusP(LBi:UBi,LBj:UBj)
+#   endif
 #   if defined ICESHELF
 #    ifdef SHORTWAVE
       real(r8), intent(inout) :: srflx(LBi:UBi,LBj:UBj)
@@ -377,7 +401,7 @@
 # ifdef ICESHELF
 
 #  ifdef ICESHELF_3EQ
-      real(r8) :: Hscale, Hlice, uStar, gturb, cff
+      real(r8) :: Hscale, Hlice, uStar, gturb
       real(r8) :: salt_b, temp_b, melt_rate
 #  endif
 
@@ -392,6 +416,7 @@
 #  endif
 # endif
 
+      real(r8) :: EmP
 #  if !defined BBL_MODEL || defined ICESHELF || \
        defined LIMIT_STFLX_COOLING
       real(r8) :: cff, cff1, cff2, cff3
@@ -407,6 +432,33 @@
       real(r8), parameter :: eps = 1.e-20_r8
 
 #  include "set_bounds.h"
+
+#  if defined BULK_FLUXES || defined ATM_COUPLING
+!
+!-----------------------------------------------------------------------
+!  If air-sea parameterization and or atmospheric coupling, assign
+!  surface net heat flux (degC m/s).  During model coupling, we need
+!  to make sure that this forcing is unaltered during the coupling
+!  interval when ROMS timestep size is smaller. Notice that further
+!  manipulations to state variable stflx(:,:,itemp)are allowed below.
+!-----------------------------------------------------------------------
+!
+#   if defined FOUR_DVAR && defined NL_BULK_FLUXES
+      IF (Nrun.eq.1) THEN
+        DO j=JstrR,JendR
+          DO i=IstrR,IendR
+            stflx(i,j,itemp)=snhflx(i,j)
+          END DO
+        END DO
+      END IF
+#   else
+      DO j=JstrR,JendR
+        DO i=IstrR,IendR
+          stflx(i,j,itemp)=snhflx(i,j)
+        END DO
+      END DO
+#   endif
+#  endif
 
 #  ifdef QCORRECTION
 !
@@ -436,7 +488,7 @@
 !-----------------------------------------------------------------------
 !
 !  Below the surface heat flux stflx(:,:,itemp) is ZERO if cooling AND
-!  the SST is cooler that the threshold.  The value is retained if
+!  the SST is cooler than the threshold.  The value is retained if
 !  warming.
 !
 !    cff3 = 0      if SST warmer than threshold (cff1) - change nothing
@@ -462,9 +514,40 @@
 !  apply correction.
 !-----------------------------------------------------------------------
 !
+#   if defined FOUR_DVAR && defined NL_BULK_FLUXES
       DO j=JstrR,JendR
         DO i=IstrR,IendR
-#   if defined SCORRECTION
+          IF (Nrun.eq.1) THEN
+#    if (defined BULK_FLUXES && defined EMINUSP) || defined ATM_COUPLING
+            EmP=EminusP(i,j)
+#    else
+            EmP=stflx(i,j,isalt)
+#    endif
+          ELSE
+            EmP=stflx(i,j,isalt)
+          END IF
+#    if defined SCORRECTION
+          stflx(i,j,isalt)=EmP*t(i,j,N(ng),nrhs,isalt)-                 &
+     &                     Tnudg(isalt,ng)*Hz(i,j,N(ng))*               &
+     &                     (t(i,j,N(ng),nrhs,isalt)-sss(i,j))
+#    elif defined SRELAXATION
+          stflx(i,j,isalt)=-Tnudg(isalt,ng)*Hz(i,j,N(ng))*              &
+     &                     (t(i,j,N(ng),nrhs,isalt)-sss(i,j))
+#    else
+          stflx(i,j,isalt)=EmP*t(i,j,N(ng),nrhs,isalt)
+#    endif
+          btflx(i,j,isalt)=btflx(i,j,isalt)*t(i,j,1,nrhs,isalt)
+        END DO
+      END DO
+#   else
+      DO j=JstrR,JendR
+        DO i=IstrR,IendR
+#    if (defined BULK_FLUXES && defined EMINUSP) || defined ATM_COUPLING
+          EmP=EminusP(i,j)
+#    else
+          EmP=stflx(i,j,isalt)
+#    endif
+#    if defined SCORRECTION
 #     if defined ICE_MODEL || defined CICE_MODEL
 #      ifdef NO_SCORRECTION_ICE
           fac_ice = 1.0_r8
@@ -474,12 +557,11 @@
           IF(ai(i,j).GE.0.1_r8) fac_ice = 0.0_r8
 #endif
 #      endif
-          stflx(i,j,isalt)=stflx(i,j,isalt) -                           &
+          stflx(i,j,isalt)=EmP -                                        &
 #     ifdef NO_SCORRECTION_ICE
      &                     fac_ice*                                     &
 #     endif
      &                     Tnudg_SSS(ng)*Hz(i,j,N(ng))*                 &
-
 #       if defined SSSC_THRESHOLD
 ! limit mismatch to avoid too strong relaxation fluxes
      &                     MIN(sss_mismatch_threshold(ng),              &
@@ -489,7 +571,7 @@
      &                     (t(i,j,N(ng),nrhs,isalt)-sss(i,j))
 #       endif
 #     else
-          stflx(i,j,isalt)=stflx(i,j,isalt)*t(i,j,N(ng),nrhs,isalt)-    &
+          stflx(i,j,isalt)=EmP*t(i,j,N(ng),nrhs,isalt)-                 &
      &                     Tnudg_SSS(ng)*Hz(i,j,N(ng))*                 &
 #       if defined SSSC_THRESHOLD
 ! limit mismatch to avoid too strong relaxation fluxes
@@ -504,9 +586,9 @@
 #     elif defined MASKING
           stflx(i,j,isalt) = rmask(i,j)*stflx(i,j,isalt)
 #     endif
-#   elif defined SRELAXATION
+#    elif defined SRELAXATION
           stflx(i,j,isalt)=-Tnudg_SSS(ng)*Hz(i,j,N(ng))*                &
-#       if defined SSSC_THRESHOLD
+#     if defined SSSC_THRESHOLD
 ! limit mismatch to avoid too strong relaxation fluxes
      &                     MIN(sss_mismatch_threshold(ng),              &
      &                         (t(i,j,N(ng),nrhs,isalt)-sss(i,j)))
@@ -518,29 +600,20 @@
 #     elif defined MASKING
           stflx(i,j,isalt) = rmask(i,j)*stflx(i,j,isalt)
 #     endif
-#   else
+#    else
 #     ifdef ICE_THERMO
           stflx(i,j,isalt)=stflx(i,j,isalt)
 #     else
-          stflx(i,j,isalt)=stflx(i,j,isalt)*t(i,j,N(ng),nrhs,isalt)
+          stflx(i,j,isalt)=EmP*t(i,j,N(ng),nrhs,isalt)
 #     endif
 #     ifdef WET_DRY
           stflx(i,j,isalt) = rmask_wet(i,j)*stflx(i,j,isalt)
 #     elif defined MASKING
           stflx(i,j,isalt) = rmask(i,j)*stflx(i,j,isalt)
 #     endif
-#   endif
-#   ifdef SSSFLX
-          stflx(i,j,isalt)=stflx(i,j,isalt)+sssflx(i,j)
-#     ifdef WET_DRY
-          stflx(i,j,isalt) = rmask_wet(i,j)*stflx(i,j,isalt)
-#     elif defined MASKING
-          stflx(i,j,isalt) = rmask(i,j)*stflx(i,j,isalt)
-#     endif
-
-#   endif
-#   if (defined SCORRECTION || defined SRELAXATION) && \
-        defined SSSFLX
+#    endif
+#    if (defined SCORRECTION || defined SRELAXATION) && \
+         defined SSSFLX
           sssflx(i,j) = -Tnudg_SSS(ng)*Hz(i,j,N(ng))*                   &
      &                     (t(i,j,N(ng),nrhs,isalt)-sss(i,j))
 #     ifdef WET_DRY
@@ -548,10 +621,19 @@
 #     elif defined MASKING
           sssflx(i,j) = rmask(i,j)*sssflx(i,j)
 #     endif
-#   endif
+#    endif
+#    ifdef SSSFLX
+          stflx(i,j,isalt)=stflx(i,j,isalt)+sssflx(i,j)
+#     ifdef WET_DRY
+          stflx(i,j,isalt) = rmask_wet(i,j)*stflx(i,j,isalt)
+#     elif defined MASKING
+          stflx(i,j,isalt) = rmask(i,j)*stflx(i,j,isalt)
+#     endif
+#    endif
           btflx(i,j,isalt)=btflx(i,j,isalt)*t(i,j,1,nrhs,isalt)
         END DO
       END DO
+#   endif
 #  endif
 #  ifdef ICESHELF
 !
@@ -1060,12 +1142,13 @@
 #  include "tile.h"
 !
 #  ifdef PROFILE
-      CALL wclock_on (ng, iNLM, 6)
+      CALL wclock_on (ng, iNLM, 6, __LINE__, __FILE__)
 #  endif
       CALL set_vbc_tile (ng, tile,                                      &
      &                   LBi, UBi, LBj, UBj,                            &
      &                   IminS, ImaxS, JminS, JmaxS,                    &
      &                   krhs(ng), kstp(ng), knew(ng),                  &
+     &                   GRID(ng) % h,                                  &
 #  if defined UV_LDRAG
      &                   GRID(ng) % rdrag,                              &
 #  elif defined UV_QDRAG
@@ -1073,10 +1156,11 @@
 #  endif
      &                   OCEAN(ng) % ubar,                              &
      &                   OCEAN(ng) % vbar,                              &
+     &                   OCEAN(ng) % zeta,                              &
      &                   FORCES(ng) % bustr,                            &
      &                   FORCES(ng) % bvstr)
 #  ifdef PROFILE
-      CALL wclock_off (ng, iNLM, 6)
+      CALL wclock_off (ng, iNLM, 6, __LINE__, __FILE__)
 #  endif
 
       RETURN
@@ -1087,12 +1171,13 @@
      &                         LBi, UBi, LBj, UBj,                      &
      &                         IminS, ImaxS, JminS, JmaxS,              &
      &                         krhs, kstp, knew,                        &
+     &                         h,                                       &
 #  if defined UV_LDRAG
      &                         rdrag,                                   &
 #  elif defined UV_QDRAG
      &                         rdrag2,                                  &
 #  endif
-     &                         ubar, vbar, bustr, bvstr)
+     &                         ubar, vbar, zeta, bustr, bvstr)
 !***********************************************************************
 !
       USE mod_param
@@ -1111,6 +1196,7 @@
       integer, intent(in) :: krhs, kstp, knew
 !
 #  ifdef ASSUMED_SHAPE
+      real(r8), intent(in) :: h(LBi:,LBj:)
 #   ifdef UV_LDRAG
       real(r8), intent(in) :: rdrag(LBi:,LBj:)
 #   endif
@@ -1119,9 +1205,11 @@
 #   endif
       real(r8), intent(in) :: ubar(LBi:,LBj:,:)
       real(r8), intent(in) :: vbar(LBi:,LBj:,:)
+      real(r8), intent(in) :: zeta(LBi:,LBj:,:)
       real(r8), intent(inout) :: bustr(LBi:,LBj:)
       real(r8), intent(inout) :: bvstr(LBi:,LBj:)
 #  else
+      real(r8), intent(in) :: h(LBi:UBi,LBj:UBj)
 #   ifdef UV_LDRAG
       real(r8), intent(in) :: rdrag(LBi:UBi,LBj:UBj)
 #   endif
@@ -1130,6 +1218,7 @@
 #   endif
       real(r8), intent(in) :: ubar(LBi:UBi,LBj:UBj,3)
       real(r8), intent(in) :: vbar(LBi:UBi,LBj:UBj,3)
+      real(r8), intent(in) :: zeta(LBi:UBi,LBj:UBj,3)
       real(r8), intent(inout) :: bustr(LBi:UBi,LBj:UBj)
       real(r8), intent(inout) :: bvstr(LBi:UBi,LBj:UBj)
 #  endif
@@ -1138,7 +1227,7 @@
 !
       integer :: i, j
 
-      real(r8) :: cff1, cff2
+      real(r8) :: cff, cff1, cff2, cff3
 
 #  include "set_bounds.h"
 !
@@ -1146,6 +1235,14 @@
 !  Set kinematic barotropic bottom momentum stress (m2/s2).
 !-----------------------------------------------------------------------
 
+#  ifdef LIMIT_BSTRESS
+!
+!  Set limiting factor for bottom stress. The bottom stress is adjusted
+!  to not change the direction of momentum.  It only should slow down
+!  to zero.  The value of 0.75 is arbitrary limitation assigment.
+!
+      cff=0.3_r8/dt(ng)
+#  endif
 #  if defined UV_LDRAG
 !
 !  Set linear bottom stress.
@@ -1154,12 +1251,26 @@
         DO i=IstrU,Iend
           bustr(i,j)=0.5_r8*(rdrag(i-1,j)+rdrag(i,j))*                  &
      &               ubar(i,j,krhs)
+#    ifdef LIMIT_BSTRESS
+          cff3=cff*0.5_r8*(h(i-1,j)+h(i,j)+                             &
+     &             zeta(i-1,j,krhs)+zeta(i,j,krhs))
+          bustr(i,j)=SIGN(1.0_r8, bustr(i,j))*                          &
+     &               MIN(ABS(bustr(i,j)),                               &
+     &                   ABS(ubar(i,j,krhs))*cff3)
+#    endif
         END DO
       END DO
       DO j=JstrV,Jend
         DO i=Istr,Iend
           bvstr(i,j)=0.5_r8*(rdrag(i,j-1)+rdrag(i,j))*                  &
      &               vbar(i,j,krhs)
+#    ifdef LIMIT_BSTRESS
+          cff3=cff*0.5_r8*(h(i,j-1)+h(i,j)+                             &
+     &             zeta(i,j-1,krhs)+zeta(i,j,krhs))
+          bvstr(i,j)=SIGN(1.0_r8, bvstr(i,j))*                          &
+     &               MIN(ABS(bvstr(i,j)),                               &
+     &                   ABS(vbar(i,j,krhs))*cff3)
+#    endif
         END DO
       END DO
 #  elif defined UV_QDRAG
@@ -1175,6 +1286,13 @@
           cff2=SQRT(ubar(i,j,krhs)*ubar(i,j,krhs)+cff1*cff1)
           bustr(i,j)=0.5_r8*(rdrag2(i-1,j)+rdrag2(i,j))*                &
      &               ubar(i,j,krhs)*cff2
+#    ifdef LIMIT_BSTRESS
+          cff3=cff*0.5_r8*(h(i-1,j)+h(i,j)+                             &
+     &             zeta(i-1,j,krhs)+zeta(i,j,krhs))
+          bustr(i,j)=SIGN(1.0_r8, bustr(i,j))*                          &
+     &               MIN(ABS(bustr(i,j)),                               &
+     &                   ABS(ubar(i,j,krhs))*cff3)
+#    endif
         END DO
       END DO
       DO j=JstrV,Jend
@@ -1186,6 +1304,13 @@
           cff2=SQRT(cff1*cff1+vbar(i,j,krhs)*vbar(i,j,krhs))
           bvstr(i,j)=0.5_r8*(rdrag2(i,j-1)+rdrag2(i,j))*                &
      &               vbar(i,j,krhs)*cff2
+#    ifdef LIMIT_BSTRESS
+          cff3=cff*0.5_r8*(h(i,j-1)+h(i,j)+                             &
+     &             zeta(i,j-1,krhs)+zeta(i,j,krhs))
+          bvstr(i,j)=SIGN(1.0_r8, bvstr(i,j))*                          &
+     &               MIN(ABS(bvstr(i,j)),                               &
+     &                   ABS(vbar(i,j,krhs))*cff3)
+#    endif
         END DO
       END DO
 #  endif

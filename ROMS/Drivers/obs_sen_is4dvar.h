@@ -2,7 +2,7 @@
 !
 !svn $Id$
 !=================================================== Andrew M. Moore ===
-!  Copyright (c) 2002-2016 The ROMS/TOMS Group      Hernan G. Arango   !
+!  Copyright (c) 2002-2020 The ROMS/TOMS Group      Hernan G. Arango   !
 !    Licensed under a MIT/X style license                              !
 !    See License_ROMS.txt                                              !
 !=======================================================================
@@ -150,16 +150,16 @@
       USE mod_ncparam
       USE mod_netcdf
       USE mod_scalars
-
-#ifdef MCT_LIB
 !
-# ifdef AIR_OCEAN
+#ifdef MCT_LIB
+# ifdef ATM_COUPLING
       USE ocean_coupler_mod, ONLY : initialize_ocn2atm_coupling
 # endif
-# ifdef WAVES_OCEAN
+# ifdef WAV_COUPLING
       USE ocean_coupler_mod, ONLY : initialize_ocn2wav_coupling
 # endif
 #endif
+      USE strings_mod,       ONLY : FoundError
 !
 !  Imported variable declarations.
 !
@@ -183,7 +183,7 @@
 #ifdef DISTRIBUTE
 !
 !-----------------------------------------------------------------------
-!  Set distribute-memory (MPI) world communictor.
+!  Set distribute-memory (mpi) world communictor.
 !-----------------------------------------------------------------------
 !
       IF (PRESENT(mpiCOMM)) THEN
@@ -215,7 +215,8 @@
 !  grids and dimension parameters are known.
 !
         CALL inp_par (iNLM)
-        IF (exit_flag.ne.NoError) RETURN
+        IF (FoundError(exit_flag, NoError, __LINE__,                    &
+     &                 __FILE__)) RETURN
 !
 !  Set domain decomposition tile partition range.  This range is
 !  computed only once since the "first_tile" and "last_tile" values
@@ -248,7 +249,7 @@
         DO ng=1,Ngrids
 !$OMP PARALLEL
           DO thread=THREAD_RANGE
-            CALL wclock_on (ng, iNLM, 0)
+            CALL wclock_on (ng, iNLM, 0, __LINE__, __FILE__)
           END DO
 !$OMP END PARALLEL
         END DO
@@ -265,17 +266,17 @@
 
       END IF
 
-#if defined MCT_LIB && (defined AIR_OCEAN || defined WAVES_OCEAN)
+#if defined MCT_LIB && (defined ATM_COUPLING || defined WAV_COUPLING)
 !
 !-----------------------------------------------------------------------
 !  Initialize coupling streams between model(s).
 !-----------------------------------------------------------------------
 !
       DO ng=1,Ngrids
-# ifdef AIR_OCEAN
+# ifdef ATM_COUPLING
         CALL initialize_ocn2atm_coupling (ng, MyRank)
 # endif
-# ifdef WAVES_OCEAN
+# ifdef WAV_COUPLING
         CALL initialize_ocn2wav_coupling (ng, MyRank)
 # endif
       END DO
@@ -291,16 +292,33 @@
 !  by solving a tri-diagonal system that uses cg_beta and cg_gamma.
 !-----------------------------------------------------------------------
 !
-      SourceFile='obs_sen_ocean.h, ROMS_initialize'
-
+      SourceFile=__FILE__ // ", ROMS_initialize"
       DO ng=1,Ngrids
         CALL netcdf_get_fvar (ng, iADM, LCZ(ng)%name, 'cg_beta',        &
      &                        cg_beta)
-        IF (exit_flag.ne. NoError) RETURN
+        IF (FoundError(exit_flag, NoError, __LINE__,                    &
+     &                 __FILE__)) RETURN
         CALL netcdf_get_fvar (ng, iADM, LCZ(ng)%name, 'cg_delta',       &
      &                        cg_delta)
-        IF (exit_flag.ne. NoError) RETURN
+        IF (FoundError(exit_flag, NoError, __LINE__,                    &
+     &                 __FILE__)) RETURN
       END DO
+
+#ifdef SKIP_NLM
+!
+!-----------------------------------------------------------------------
+!  If skipping running nonlinear model, read in observation screening and
+!  quality control flag.
+!-----------------------------------------------------------------------
+!
+      wrtObsScale(1:Ngrids)=.FALSE.
+      DO ng=1,Ngrids
+        CALL netcdf_get_fvar (ng, iTLM, LCZ(ng)%name, Vname(1,idObsS),  &
+     &                        ObsScale)
+        IF (FoundError(exit_flag, NoError, __LINE__,                    &
+     &                 __FILE__)) RETURN
+      END DO
+#endif
 !
 !-----------------------------------------------------------------------
 !  Read in standard deviation factors for error covariance.
@@ -312,8 +330,9 @@
       STDrec=1
       Tindex=1
       DO ng=1,Ngrids
-        CALL get_state (ng, 6, 6, STD(1,ng)%name, STDrec, Tindex)
-        IF (exit_flag.ne.NoError) RETURN
+        CALL get_state (ng, 10, 10, STD(1,ng)%name, STDrec, Tindex)
+        IF (FoundError(exit_flag, NoError, __LINE__,                    &
+     &                 __FILE__)) RETURN
       END DO
 
 #ifdef ADJUST_BOUNDARY
@@ -323,8 +342,9 @@
       STDrec=1
       Tindex=1
       DO ng=1,Ngrids
-        CALL get_state (ng, 8, 8, STD(3,ng)%name, STDrec, Tindex)
-        IF (exit_flag.ne.NoError) RETURN
+        CALL get_state (ng, 12, 12, STD(3,ng)%name, STDrec, Tindex)
+        IF (FoundError(exit_flag, NoError, __LINE__,                    &
+     &                 __FILE__)) RETURN
       END DO
 #endif
 #if defined ADJUST_WSTRESS || defined ADJUST_STFLUX
@@ -334,8 +354,9 @@
       STDrec=1
       Tindex=1
       DO ng=1,Ngrids
-        CALL get_state (ng, 9, 9, STD(4,ng)%name, STDrec, Tindex)
-        IF (exit_flag.ne.NoError) RETURN
+        CALL get_state (ng, 13, 13, STD(4,ng)%name, STDrec, Tindex)
+        IF (FoundError(exit_flag, NoError, __LINE__,                    &
+     &                 __FILE__)) RETURN
       END DO
 #endif
 !
@@ -346,16 +367,19 @@
 !
       NRMrec=1
       DO ng=1,Ngrids
-        CALL get_state (ng, 5, 5, NRM(1,ng)%name, NRMrec, 1)
-        IF (exit_flag.ne.NoError) RETURN
+        CALL get_state (ng, 14, 14, NRM(1,ng)%name, NRMrec, 1)
+        IF (FoundError(exit_flag, NoError, __LINE__,                    &
+     &                 __FILE__)) RETURN
 
 #ifdef ADJUST_BOUNDARY
-        CALL get_state (ng, 10, 10, NRM(3,ng)%name, NRMrec, 1)
-        IF (exit_flag.ne.NoError) RETURN
+        CALL get_state (ng, 16, 16, NRM(3,ng)%name, NRMrec, 1)
+        IF (FoundError(exit_flag, NoError, __LINE__,                    &
+     &                 __FILE__)) RETURN
 #endif
 #if defined ADJUST_WSTRESS || defined ADJUST_STFLUX
-        CALL get_state (ng, 11, 11, NRM(4,ng)%name, NRMrec, 1)
-        IF (exit_flag.ne.NoError) RETURN
+        CALL get_state (ng, 17, 17, NRM(4,ng)%name, NRMrec, 1)
+        IF (FoundError(exit_flag, NoError, __LINE__,                    &
+     &                 __FILE__)) RETURN
 #endif
       END DO
 
@@ -383,35 +407,36 @@
       USE mod_stepping
 !
 #ifdef BALANCE_OPERATOR
-      USE ad_balance_mod, ONLY: ad_balance
+      USE ad_balance_mod,     ONLY : ad_balance
 #endif
       USE ad_convolution_mod, ONLY : ad_convolution
       USE ad_variability_mod, ONLY : ad_variability
 #ifdef ADJUST_BOUNDARY
-      USE mod_boundary, ONLY : initialize_boundary
+      USE mod_boundary,       ONLY : initialize_boundary
 #endif
 #if defined OBS_IMPACT && defined OBS_IMPACT_SPLIT
-      USE mod_forces, ONLY : initialize_forces
-      USE mod_ocean, ONLY : initialize_ocean
+      USE mod_forces,         ONLY : initialize_forces
+      USE mod_ocean,          ONLY : initialize_ocean
 #endif
+      USE strings_mod,        ONLY : FoundError
 #ifdef BALANCE_OPERATOR
-      USE tl_balance_mod, ONLY: tl_balance
+      USE tl_balance_mod,     ONLY : tl_balance
 #endif
       USE tl_convolution_mod, ONLY : tl_convolution
       USE tl_variability_mod, ONLY : tl_variability
 #if defined BALANCE_OPERATOR && defined ZETA_ELLIPTIC
-      USE zeta_balance_mod, ONLY: balance_ref, biconj
+      USE zeta_balance_mod,   ONLY : balance_ref, biconj
 #endif
 !
 !  Imported variable declarations
 !
-      real(r8), intent(in) :: RunInterval            ! seconds
+      real(dp), intent(in) :: RunInterval            ! seconds
 !
 !  Local variable declarations.
 !
       logical :: Ladjoint, Lweak
 
-      integer :: i, ng, tile
+      integer :: i, lstr, ng, tile
       integer :: Fcount, Lbck, Lini, Litl, Rec
 
       real (r8) :: str_day, end_day
@@ -440,20 +465,28 @@
       END DO
 !
 !  Initialize nonlinear model with the estimated initial conditions
-!  from the IS4DVAR Lanczos algorithm.
+!  from the IS4DVAR Lanczos algorithm.  Notice that the LreadBLK and
+!  LreadFWD switches are turned off to suppress processing of the
+!  structures when "check_multifile" during
+!  nonlinear model execution.
 !
       DO ng=1,Ngrids
+#if defined BULK_FLUXES && defined NL_BULK_FLUXES
+        LreadBLK(ng)=.FALSE.
+#endif
+        LreadFWD(ng)=.FALSE.
         wrtNLmod(ng)=.FALSE.
         wrtTLmod(ng)=.FALSE.
         RST(ng)%Rindex=0
-        Fcount=RST(ng)%Fcount
+        Fcount=RST(ng)%load
         RST(ng)%Nrec(Fcount)=0
       END DO
 
 !$OMP PARALLEL
       CALL initial
 !$OMP END PARALLEL
-      IF (exit_flag.ne.NoError) RETURN
+      IF (FoundError(exit_flag, NoError, __LINE__,                      &
+     &               __FILE__)) RETURN
 
 #if defined BALANCE_OPERATOR && defined ZETA_ELLIPTIC
 !
@@ -472,6 +505,7 @@
         END DO
       END IF
 #endif
+#ifndef SKIP_NLM
 !
 !  Run nonlinear model for the combined assimilation plus forecast
 !  period, t=t0 to t2. Save nonlinear (basic state) tracjectory, xb(t),
@@ -484,22 +518,43 @@
       END DO
 
 !$OMP PARALLEL
-#ifdef SOLVE3D
+# ifdef SOLVE3D
       CALL main3d (RunInterval)
-#else
+# else
       CALL main2d (RunInterval)
-#endif
+# endif
 !$OMP END PARALLEL
-      IF (exit_flag.ne.NoError) RETURN
+      IF (FoundError(exit_flag, NoError, __LINE__,                      &
+     &               __FILE__)) RETURN
+#endif
+!
+!  Set structure for the nonlinear forward trajectory to be processed
+!  by the tangent linear and adjoint models. Also, set switches to
+!  process the FWD structure in routine "check_multifile". Notice that
+!  it is possible to split solution into multiple NetCDF files to reduce
+!  their size.
+!
+        CALL edit_multifile ('HIS2FWD')
+        IF (FoundError(exit_flag, NoError, __LINE__,                    &
+     &                 __FILE__)) RETURN
+        DO ng=1,Ngrids
+          LreadFWD(ng)=.TRUE.
+        END DO
 
 #if defined BULK_FLUXES && defined NL_BULK_FLUXES
 !
-!  Set file name containing the nonlinear model bulk fluxes to be read
-!  and processed by other algorithms.
+!  Set structure for the nonlinear surface fluxes to be processed by
+!  by the tangent linear and adjoint models. Also, set switches to
+!  process the BLK structure in routine "check_multifile".  Notice that
+!  it is possible to split solution into multiple NetCDF files to reduce
+!  their size.
 !
-      DO ng=1,Ngrids
-        BLK(ng)%name=HIS(ng)%name
-      END DO
+        CALL edit_multifile ('HIS2BLK')
+        IF (FoundError(exit_flag, NoError, __LINE__,                    &
+     &                 __FILE__)) RETURN
+        DO ng=1,Ngrids
+          LreadBLK(ng)=.TRUE.
+        END DO
 #endif
 !
 !  Initialize adjoint model and define sensitivity functional.
@@ -509,7 +564,8 @@
 !$OMP PARALLEL
         CALL ad_initial (ng)
 !$OMP END PARALLEL
-        IF (exit_flag.ne.NoError) RETURN
+        IF (FoundError(exit_flag, NoError, __LINE__,                    &
+     &                 __FILE__)) RETURN
       END DO
 !
 !  Activate adjoint output.
@@ -577,7 +633,8 @@
         CALL ad_main2d (RunInterval)
 #endif
 !$OMP END PARALLEL
-        IF (exit_flag.ne.NoError) RETURN
+        IF (FoundError(exit_flag, NoError, __LINE__,                    &
+     &                 __FILE__)) RETURN
       END IF
 !
 !  Load full adjoint sensitivity vector, x(0), for t=t0 into adjoint
@@ -596,7 +653,8 @@
 !
       DO ng=1,Ngrids
         CALL get_state (ng, iNLM, 2, INI(ng)%name, Lini, Lini)
-        IF (exit_flag.ne.NoError) RETURN
+        IF (FoundError(exit_flag, NoError, __LINE__,                    &
+     &                 __FILE__)) RETURN
         nrhs(ng)=Lini
       END DO
 #endif
@@ -620,33 +678,42 @@
 !  time to run the tangent linear model.  This time must be the same
 !  as the IS4DVAR Lanczos algorithm.
 !
-      SourceFile='obs_sen_ocean.h, ROMS_run'
+      SourceFile=__FILE__ // ", ROMS_run"
       DO ng=1,Ngrids
         CALL netcdf_get_ivar (ng, iADM, LCZ(ng)%name, 'ntimes',         &
      &                        ntimes(ng))
-        IF (exit_flag.ne. NoError) RETURN
+        IF (FoundError(exit_flag, NoError, __LINE__,                    &
+     &                 __FILE__)) RETURN
       END DO
 
 #ifndef OBS_IMPACT
 !
 !  Initialize nonlinear model with the same initial conditions, xb(0),
 !  Lbck record in INI(ng)%name. This is the first guess NLM initial
-!  conditions used to start the IS4DVAR Lanczos algorithm.
+!  conditions used to start the IS4DVAR Lanczos algorithm. Notice that
+!  the LreadBLK and LreadFWD switches are turned off to suppress
+!  processing of the structures when "check_multifile" during
+!  nonlinear model execution.
 !
       DO ng=1,Ngrids
         LdefINI(ng)=.FALSE.
+# if defined BULK_FLUXES && defined NL_BULK_FLUXES
+        LreadBLK(ng)=.FALSE.
+# endif
+        LreadFWD(ng)=.FALSE.
         wrtNLmod(ng)=.FALSE.
         wrtTLmod(ng)=.FALSE.
         RST(ng)%Rindex=0
         INI(ng)%Rindex=Lbck
-        Fcount=RST(ng)%Fcount
+        Fcount=RST(ng)%load
         RST(ng)%Nrec(Fcount)=0
       END DO
 
 !$OMP PARALLEL
       CALL initial
 !$OMP END PARALLEL
-      IF (exit_flag.ne.NoError) RETURN
+      IF (FoundError(exit_flag, NoError, __LINE__,                      &
+     &               __FILE__)) RETURN
 !
 !  Run nonlinear model for the combined assimilation plus forecast
 !  period, t=t0 to t2. Save nonlinear (basic state) tracjectory, xb(t),
@@ -665,7 +732,37 @@
       CALL main2d (RunInterval)
 # endif
 !$OMP END PARALLEL
-      IF (exit_flag.ne.NoError) RETURN
+      IF (FoundError(exit_flag, NoError, __LINE__,                      &
+     &               __FILE__)) RETURN
+!
+!  Set structure for the nonlinear forward trajectory to be processed
+!  by the tangent linear and adjoint models. Also, set switches to
+!  process the FWD structure in routine "check_multifile".  Notice that
+!  it is possible to split solution into multiple NetCDF files to reduce
+!  their size.
+!
+      CALL edit_multifile ('HIS2FWD')
+      IF (FoundError(exit_flag, NoError, __LINE__,                      &
+     &               __FILE__)) RETURN
+      DO ng=1,Ngrids
+        LreadFWD(ng)=.TRUE.
+      END DO
+
+# if defined BULK_FLUXES && defined NL_BULK_FLUXES
+!
+!  Set structure for the nonlinear surface fluxes to be processed by
+!  by the tangent linear and adjoint models. Also, set switches to
+!  process the BLK structure in routine "check_multifile".  Notice that
+!  it is possible to split solution into multiple NetCDF files to reduce
+!  their size.
+!
+      CALL edit_multifile ('HIS2BLK')
+      IF (FoundError(exit_flag, NoError, __LINE__,                      &
+     &               __FILE__)) RETURN
+      DO ng=1,Ngrids
+        LreadBLK(ng)=.TRUE.
+      END DO
+# endif
 #endif
 !
 !  Initialize tangent linear model with the weighted sum of the
@@ -676,7 +773,8 @@
 !$OMP PARALLEL
         CALL tl_initial (ng)
 !$OMP END PARALLEL
-        IF (exit_flag.ne.NoError) RETURN
+        IF (FoundError(exit_flag, NoError, __LINE__,                    &
+     &                 __FILE__)) RETURN
         LdefTLM(ng)=.TRUE.
         LwrtTLM(ng)=.TRUE.
         wrtTLmod(ng)=.TRUE.
@@ -702,11 +800,23 @@
       DO ng=1,Ngrids
         LdefMOD(ng)=.TRUE.
         CALL def_mod (ng)
-        IF (exit_flag.ne.NoError) RETURN
+        IF (FoundError(exit_flag, NoError, __LINE__,                    &
+     &                 __FILE__)) RETURN
         wrtIMPACT_TOT(ng)=.TRUE.
 #ifdef OBS_IMPACT_SPLIT
         wrtIMPACT_IC(ng)=.FALSE.
 #endif
+      END DO
+!
+!  Write out outer loop beeing processed.
+!
+      SourceFile=__FILE__ // ", ROMS_run"
+      DO ng=1,Ngrids
+        CALL netcdf_put_ivar (ng, iNLM, DAV(ng)%name, 'Nimpact',        &
+     &                        Nimpact, (/0/), (/0/),                    &
+     &                        ncid = DAV(ng)%ncid)
+        IF (FoundError(exit_flag, NoError, __LINE__,                    &
+     &                 __FILE__)) RETURN
       END DO
 !
 !  Run tangent linear model for the assimilation period, t=t0 to t1.
@@ -725,7 +835,8 @@
       CALL tl_main2d (RunInterval)
 #endif
 !$OMP END PARALLEL
-      IF (exit_flag.ne.NoError) RETURN
+      IF (FoundError(exit_flag, NoError, __LINE__,                      &
+     &               __FILE__)) RETURN
 
 #if defined OBS_IMPACT && defined OBS_IMPACT_SPLIT
 !
@@ -741,7 +852,8 @@
       DO ng=1,Ngrids
         CALL get_state (ng, iADM, 4, ADM(ng)%name, ADM(ng)%Rindex,      &
      &                  Lnew(ng))
-        IF (exit_flag.ne.NoError) RETURN
+        IF (FoundError(exit_flag, NoError, __LINE__,                    &
+     &                 __FILE__)) RETURN
       END DO
 
 # ifdef BALANCE_OPERATOR
@@ -750,7 +862,8 @@
 !
       DO ng=1,Ngrids
         CALL get_state (ng, iNLM, 2, INI(ng)%name, Lini, Lini)
-        IF (exit_flag.ne.NoError) RETURN
+        IF (FoundError(exit_flag, NoError, __LINE__,                    &
+     &                 __FILE__)) RETURN
         nrhs(ng)=Lini
       END DO
 # endif
@@ -787,11 +900,12 @@
 !  time to run the tangent linear model.  This time must be the same
 !  as the IS4DVAR Lanczos algorithm.
 !
-      SourceFile='obs_sen_ocean.h, ROMS_run'
+      SourceFile=__FILE__ // ", ROMS_run"
       DO ng=1,Ngrids
         CALL netcdf_get_ivar (ng, iADM, LCZ(ng)%name, 'ntimes',         &
      &                        ntimes(ng))
-        IF (exit_flag.ne. NoError) RETURN
+        IF (FoundError(exit_flag, NoError, __LINE__,                    &
+     &                 __FILE__)) RETURN
       END DO
 !
 !  Initialize tangent linear model with the weighted sum of the
@@ -802,7 +916,8 @@
 !$OMP PARALLEL
         CALL tl_initial (ng)
 !$OMP END PARALLEL
-        IF (exit_flag.ne.NoError) RETURN
+        IF (FoundError(exit_flag, NoError, __LINE__,                    &
+     &                 __FILE__)) RETURN
         LdefTLM(ng)=.TRUE.
         LwrtTLM(ng)=.TRUE.
         wrtTLmod(ng)=.TRUE.
@@ -846,7 +961,8 @@
       CALL tl_main2d (RunInterval)
 # endif
 !$OMP END PARALLEL
-      IF (exit_flag.ne.NoError) RETURN
+      IF (FoundError(exit_flag, NoError, __LINE__,                      &
+     &               __FILE__)) RETURN
 
 # if defined ADJUST_WSTRESS || defined ADJUST_STFLUX
 !
@@ -861,7 +977,8 @@
       DO ng=1,Ngrids
         CALL get_state (ng, iADM, 4, ADM(ng)%name, ADM(ng)%Rindex,      &
      &                  Lnew(ng))
-        IF (exit_flag.ne.NoError) RETURN
+        IF (FoundError(exit_flag, NoError, __LINE__,                    &
+     &                 __FILE__)) RETURN
       END DO
 
 #  ifdef BALANCE_OPERATOR
@@ -870,7 +987,8 @@
 !
       DO ng=1,Ngrids
         CALL get_state (ng, iNLM, 2, INI(ng)%name, Lini, Lini)
-        IF (exit_flag.ne.NoError) RETURN
+        IF (FoundError(exit_flag, NoError, __LINE__,                    &
+     &                 __FILE__)) RETURN
         nrhs(ng)=Lini
       END DO
 #  endif
@@ -908,11 +1026,12 @@
 !  time to run the tangent linear model.  This time must be the same
 !  as the IS4DVAR Lanczos algorithm.
 !
-      SourceFile='obs_sen_ocean.h, ROMS_run'
+      SourceFile=__FILE__ // ", ROMS_run"
       DO ng=1,Ngrids
         CALL netcdf_get_ivar (ng, iADM, LCZ(ng)%name, 'ntimes',         &
      &                        ntimes(ng))
-        IF (exit_flag.ne. NoError) RETURN
+        IF (FoundError(exit_flag, NoError, __LINE__,                    &
+     &                 __FILE__)) RETURN
       END DO
 !
 !  Initialize tangent linear model with the weighted sum of the
@@ -923,7 +1042,8 @@
 !$OMP PARALLEL
         CALL tl_initial (ng)
 !$OMP END PARALLEL
-        IF (exit_flag.ne.NoError) RETURN
+        IF (FoundError(exit_flag, NoError, __LINE__,                    &
+     &                 __FILE__)) RETURN
         LdefTLM(ng)=.TRUE.
         LwrtTLM(ng)=.TRUE.
         wrtTLmod(ng)=.TRUE.
@@ -965,7 +1085,8 @@
       CALL tl_main2d (RunInterval)
 #  endif
 !$OMP END PARALLEL
-      IF (exit_flag.ne.NoError) RETURN
+      IF (FoundError(exit_flag, NoError, __LINE__,                      &
+     &               __FILE__)) RETURN
 # endif
 
 # if defined ADJUST_BOUNDARY
@@ -981,7 +1102,8 @@
       DO ng=1,Ngrids
         CALL get_state (ng, iADM, 4, ADM(ng)%name, ADM(ng)%Rindex,      &
      &                  Lnew(ng))
-        IF (exit_flag.ne.NoError) RETURN
+        IF (FoundError(exit_flag, NoError, __LINE__,                    &
+     &                 __FILE__)) RETURN
       END DO
 
 #  ifdef BALANCE_OPERATOR
@@ -990,7 +1112,8 @@
 !
       DO ng=1,Ngrids
         CALL get_state (ng, iNLM, 2, INI(ng)%name, Lini, Lini)
-        IF (exit_flag.ne.NoError) RETURN
+        IF (FoundError(exit_flag, NoError, __LINE__,                    &
+     &                 __FILE__)) RETURN
         nrhs(ng)=Lini
       END DO
 #  endif
@@ -1025,11 +1148,12 @@
 !  time to run the tangent linear model.  This time must be the same
 !  as the IS4DVAR Lanczos algorithm.
 !
-      SourceFile='obs_sen_ocean.h, ROMS_run'
+      SourceFile=__FILE__ // ", ROMS_run"
       DO ng=1,Ngrids
         CALL netcdf_get_ivar (ng, iADM, LCZ(ng)%name, 'ntimes',         &
      &                        ntimes(ng))
-        IF (exit_flag.ne. NoError) RETURN
+        IF (FoundError(exit_flag, NoError, __LINE__,                    &
+     &                 __FILE__)) RETURN
       END DO
 !
 !  Initialize tangent linear model with the weighted sum of the
@@ -1040,7 +1164,8 @@
 !$OMP PARALLEL
         CALL tl_initial (ng)
 !$OMP END PARALLEL
-        IF (exit_flag.ne.NoError) RETURN
+        IF (FoundError(exit_flag, NoError, __LINE__,                    &
+     &                 __FILE__)) RETURN
         LdefTLM(ng)=.TRUE.
         LwrtTLM(ng)=.TRUE.
         wrtTLmod(ng)=.TRUE.
@@ -1082,7 +1207,8 @@
       CALL tl_main2d (RunInterval)
 #  endif
 !$OMP END PARALLEL
-      IF (exit_flag.ne.NoError) RETURN
+      IF (FoundError(exit_flag, NoError, __LINE__,                      &
+     &               __FILE__)) RETURN
 # endif
 
 #endif
@@ -1129,7 +1255,7 @@
             IF (Master) WRITE (stdout,10)
  10         FORMAT (/,' Blowing-up: Saving latest model state into ',   &
      &                ' RESTART file',/)
-            Fcount=RST(ng)%Fcount
+            Fcount=RST(ng)%load
             IF (LcycleRST(ng).and.(RST(ng)%Nrec(Fcount).ge.2)) THEN
               RST(ng)%Rindex=2
               LcycleRST(ng)=.FALSE.
@@ -1142,7 +1268,8 @@
       END IF
 !
 !-----------------------------------------------------------------------
-!  Stop model and time profiling clocks.  Close output NetCDF files.
+!  Stop model and time profiling clocks, report memory requirements, and
+!  close output NetCDF files.
 !-----------------------------------------------------------------------
 !
 !  Stop time clocks.
@@ -1151,17 +1278,26 @@
         WRITE (stdout,20)
  20     FORMAT (/,' Elapsed CPU time (seconds):',/)
       END IF
-
+!
       DO ng=1,Ngrids
 !$OMP PARALLEL
         DO thread=THREAD_RANGE
-          CALL wclock_off (ng, iADM, 0)
+          CALL wclock_off (ng, iNLM, 0, __LINE__, __FILE__)
         END DO
 !$OMP END PARALLEL
       END DO
 !
+!  Report dynamic memory and automatic memory requirements.
+!
+!$OMP PARALLEL
+      CALL memory
+!$OMP END PARALLEL
+!
 !  Close IO files.
 !
+      DO ng=1,Ngrids
+        CALL close_inp (ng, iNLM)
+      END DO
       CALL close_out
 
       RETURN

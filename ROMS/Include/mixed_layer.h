@@ -1,7 +1,7 @@
 /*
 ** svn $Id$
 *******************************************************************************
-** Copyright (c) 2002-2016 The ROMS/TOMS Group                               **
+** Copyright (c) 2002-2020 The ROMS/TOMS Group                               **
 **   Licensed under a MIT/X style license                                    **
 **   See License_ROMS.txt                                                    **
 *******************************************************************************
@@ -10,7 +10,7 @@
 ** thermal stratification and wind stress.
 **
 ** Application flag:   MIXED_LAYER
-** Input script:       ocean_mixed_layer.in
+** Input script:       roms_mixed_layer.in
 */
 
 #define WRITE_GRID
@@ -26,7 +26,6 @@
 #define ANA_BTFLUX
 #define ANA_SSFLUX
 #define ANA_BSFLUX
-#define TS_U3HADVECTION
 
 #undef  MY25_MIXING
 #define GLS_MIXING

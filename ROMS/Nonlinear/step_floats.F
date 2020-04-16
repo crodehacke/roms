@@ -4,7 +4,7 @@
 !
 !svn $Id$
 !================================================== Hernan G. Arango ===
-!  Copyright (c) 2002-2016 The ROMS/TOMS Group        John M. Klinck   !
+!  Copyright (c) 2002-2020 The ROMS/TOMS Group        John M. Klinck   !
 !    Licensed under a MIT/X style license                              !
 !    See License_ROMS.txt                                              !
 !=======================================================================
@@ -51,7 +51,7 @@
       integer, intent(in) :: ng, Lstr, Lend
 !
 # ifdef PROFILE
-      CALL wclock_on (ng, iNLM, 10)
+      CALL wclock_on (ng, iNLM, 10, __LINE__, __FILE__)
 # endif
       CALL step_floats_tile (ng, Lstr, Lend,                            &
      &                       knew(ng), nnew(ng), nfm3(ng), nfm2(ng),    &
@@ -65,7 +65,7 @@
 # endif
      &                       DRIFTER(ng) % track)
 # ifdef PROFILE
-      CALL wclock_off (ng, iNLM, 10)
+      CALL wclock_off (ng, iNLM, 10, __LINE__, __FILE__)
 # endif
       RETURN
       END SUBROUTINE step_floats
@@ -92,6 +92,7 @@
       USE interp_floats_mod
 # ifdef DIAPAUSE
       USE interp_floats_diapW_mod
+      USE dateclock_mod,   ONLY : caldate
 # endif
 !
 # ifdef FLOAT_BIOLOGY
@@ -154,8 +155,8 @@
 !      logical :: downward , upward
       real(r8) :: RiseStart,RiseEnd,SinkStart,SinkEnd
       real(r8) :: wNCsink,wNCrise
-      integer :: iday, month, year
-      real(r8) :: yday, hour, dtdays,cff,diapW
+      real(dp) :: yday, dtdays
+      real(r8) :: cff,diapW
       integer :: FloatPhase
 # endif
 
@@ -166,7 +167,7 @@
       real(r8), dimension(Nfloats(ng)*NFV(ng)*(NFT+1)) :: Fwrk
 # endif
 # ifdef DIAPAUSE
-      CALL caldate (r_date, tdays(ng), year, yday, month, iday, hour)
+      CALL caldate (tdays(ng), yd_dp=yday)
 # endif
 !
 !  Set tile array bounds.

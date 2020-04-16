@@ -3,7 +3,7 @@
 !
 !svn $Id$
 !================================================== Hernan G. Arango ===
-!  Copyright (c) 2002-2016 The ROMS/TOMS Group                         !
+!  Copyright (c) 2002-2020 The ROMS/TOMS Group                         !
 !    Licensed under a MIT/X style license                              !
 !    See License_ROMS.txt                                              !
 !=======================================================================
@@ -49,7 +49,7 @@
      &                               'stability problems, WARNING'
       END IF
 
-      string=uppercase('ts_u3adv_split')
+      string=uppercase('split_u3')
       ifound=INDEX(TRIM(Coptions), TRIM(string))
       IF (ifound.ne.0) THEN
         IF (Master) WRITE(stdout,10) TRIM(string),                      &
@@ -77,14 +77,6 @@
 !  adjoint-based algorithms.
 !-----------------------------------------------------------------------
 !
-      string=uppercase('atm_press')
-      ifound=INDEX(TRIM(Coptions), TRIM(string))
-      IF (ifound.ne.0) THEN
-        ic=ic+1
-        IF (Master) WRITE(stdout,20) TRIM(string),                      &
-     &                               'not tested, FATAL ERROR'
-      END IF
-
       string=uppercase('bedload_mpm')
       ifound=INDEX(TRIM(Coptions), TRIM(string))
       IF (ifound.ne.0) THEN
@@ -107,13 +99,6 @@
         ic=ic+1
         IF (Master) WRITE(stdout,20) TRIM(string),                      &
      &                               'not coded, FATAL ERROR'
-      END IF
-
-      string=uppercase('bio_umaine')
-      ifound=INDEX(TRIM(Coptions), TRIM(string))
-      IF (ifound.ne.0) THEN
-        ic=ic+1
-        IF (Master) WRITE(stdout,20) TRIM(string), 'not coded'
       END IF
 
 # ifndef NL_BULK_FLUXES
@@ -139,7 +124,7 @@
       string=uppercase('clima_ts_mix')
       ifound=INDEX(TRIM(Coptions), TRIM(string))
       IF (ifound.ne.0) THEN
-        IF (Master) WRITE(stdout,20) TRIM(string),                      &
+        IF (Master) WRITE(stdout,10) TRIM(string),                      &
      &                               'not tested, WARNING'
       END IF
 
@@ -297,6 +282,14 @@
      &                               'not coded, FATAL ERROR'
       END IF
 
+      string=uppercase('geopotential_hconv')
+      ifound=INDEX(TRIM(Coptions), TRIM(string))
+      IF (ifound.ne.0) THEN
+        ic=ic+1
+        IF (Master) WRITE(stdout,10) TRIM(string),                      &
+     &                               'experimental, AVOID USAGE'
+      END IF
+
 # ifndef FORWARD_MIXING
       string=uppercase('gls_mixing')
       ifound=INDEX(TRIM(Coptions), TRIM(string))
@@ -306,6 +299,14 @@
      &                               'not differentiable, WARNING'
       END IF
 # endif
+
+      string=uppercase('hypoxia_srm')
+      ifound=INDEX(TRIM(Coptions), TRIM(string))
+      IF (ifound.ne.0) THEN
+        ic=ic+1
+        IF (Master) WRITE(stdout,20) TRIM(string),                      &
+     &                               'not coded, FATAL ERROR'
+      END IF
 
       string=uppercase('limit_bstress')
       ifound=INDEX(TRIM(Coptions), TRIM(string))
@@ -463,15 +464,38 @@
      &                               'not allowed, FATAL ERROR'
       END IF
 
-# if !(defined TS_HADVECTION_TL && defined TS_VADVECTION_TL)
-      string=uppercase('ts_mpdata')
-      ifound=INDEX(TRIM(Coptions), TRIM(string))
-      IF (ifound.ne.0) THEN
-        ic=ic+1
-        IF (Master) WRITE(stdout,20) TRIM(string),                      &
-     &                               'not coded, FATAL ERROR'
+      IF (ANY(tl_Hadvection(:,:)%MPDATA).or.                            &
+     &    ANY(tl_Vadvection(:,:)%MPDATA)) THEN
+        string=uppercase('mpdata')
+        ifound=INDEX(TRIM(Coptions), TRIM(string))
+        IF (ifound.ne.0) THEN
+          ic=ic+1
+          IF (Master) WRITE(stdout,20) TRIM(string),                    &
+     &                                 'not coded, FATAL ERROR'
+        END IF
       END IF
-# endif
+
+      IF (ANY(tl_Hadvection(:,:)%HSIMT).or.                             &
+     &    ANY(tl_Vadvection(:,:)%HSIMT)) THEN
+        string=uppercase('hsimt')
+        ifound=INDEX(TRIM(Coptions), TRIM(string))
+        IF (ifound.ne.0) THEN
+          ic=ic+1
+          IF (Master) WRITE(stdout,20) TRIM(string),                    &
+     &                                 'not coded, FATAL ERROR'
+        END IF
+      END IF
+
+      IF (ANY(tl_Hadvection(:,:)%SPLIT_U3).or.                          &
+     &    ANY(tl_Vadvection(:,:)%SPLIT_U3)) THEN
+        string=uppercase('split_u3')
+        ifound=INDEX(TRIM(Coptions), TRIM(string))
+        IF (ifound.ne.0) THEN
+          ic=ic+1
+          IF (Master) WRITE(stdout,20) TRIM(string),                    &
+     &                                 'not coded, FATAL ERROR'
+        END IF
+      END IF
 
       string=uppercase('ts_smagorinsky')
       ifound=INDEX(TRIM(Coptions), TRIM(string))
@@ -480,16 +504,6 @@
         IF (Master) WRITE(stdout,20) TRIM(string),                      &
      &                               'not coded, FATAL ERROR'
       END IF
-
-# if !defined TS_HADVECTION_TL
-      string=uppercase('ts_u3adv_split')
-      ifound=INDEX(TRIM(Coptions), TRIM(string))
-      IF (ifound.ne.0) THEN
-        ic=ic+1
-        IF (Master) WRITE(stdout,20) TRIM(string),                      &
-     &                               'not coded, FATAL ERROR'
-      END IF
-# endif
 
       string=uppercase('uv_smagorinsky')
       ifound=INDEX(TRIM(Coptions), TRIM(string))

@@ -3,7 +3,7 @@
 !
 !svn $Id$
 !================================================== Hernan G. Arango ===
-!  Copyright (c) 2002-2016 The ROMS/TOMS Group                         !
+!  Copyright (c) 2002-2020 The ROMS/TOMS Group                         !
 !    Licensed under a MIT/X style license                              !
 !    See License_ROMS.txt                                              !
 !=======================================================================
@@ -46,6 +46,7 @@
 !! ana_psource.h       Analytical mass/tracer point sources/sinks.     !
 !! ana_trc_psource.h   Analytical mass/tracer point sources/sinks.     !
 !! ana_rain.h          Analytical rain fall rate.                      !
+!! ana_respiration.h   Analytical total respiration for hypoxia.       !
 !! ana_scope.h         Analytical adjoint sensitivity spatial scope    !
 !!                       mask.                                         !
 !! ana_sediment.h      Analytical initial conditions for sediment      !
@@ -230,6 +231,12 @@
 #  endif
 # endif
 
+# ifdef SOLVE3D
+#  if defined ANA_RESPIRATION && defined HYPOXIA_SRM
+#   include <ana_respiration.h>
+#  endif
+# endif
+
 # if defined ANA_GRID        && \
    (defined AD_SENSITIVITY   || defined IS4DVAR_SENSITIVITY || \
     defined OPT_OBSERVATIONS || defined SENSITIVITY_4DVAR   || \
@@ -259,7 +266,7 @@
 #  include <ana_sponge.h>
 # endif
 
-# if (defined ANA_SRFLUX && defined SOLVE3D) || defined DIURNAL_SRFLUX
+# if (defined ANA_SRFLUX || defined DIURNAL_SRFLUX) && defined SOLVE3D
 #  include <ana_srflux.h>
 # endif
 

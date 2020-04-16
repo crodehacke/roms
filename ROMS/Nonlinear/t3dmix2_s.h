@@ -2,7 +2,7 @@
 !
 !svn $Id$
 !***********************************************************************
-!  Copyright (c) 2002-2016 The ROMS/TOMS Group                         !
+!  Copyright (c) 2002-2020 The ROMS/TOMS Group                         !
 !    Licensed under a MIT/X style license                              !
 !    See License_ROMS.txt                           Hernan G. Arango   !
 !****************************************** Alexander F. Shchepetkin ***
@@ -33,7 +33,7 @@
 #include "tile.h"
 !
 #ifdef PROFILE
-      CALL wclock_on (ng, iNLM, 24)
+      CALL wclock_on (ng, iNLM, 24, __LINE__, __FILE__)
 #endif
       CALL t3dmix2_tile (ng, tile,                                      &
      &                   LBi, UBi, LBj, UBj,                            &
@@ -65,7 +65,7 @@
 #endif
      &                   OCEAN(ng) % t)
 #ifdef PROFILE
-      CALL wclock_off (ng, iNLM, 24)
+      CALL wclock_off (ng, iNLM, 24, __LINE__, __FILE__)
 #endif
       RETURN
       END SUBROUTINE t3dmix2

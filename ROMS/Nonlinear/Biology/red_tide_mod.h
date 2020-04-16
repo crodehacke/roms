@@ -1,7 +1,7 @@
 !
 !svn $Id$
 !================================================== Hernan G. Arango ===
-!  Copyright (c) 2002-2016 The ROMS/TOMS Group                         !
+!  Copyright (c) 2002-2020 The ROMS/TOMS Group                         !
 !    Licensed under a MIT/X style license                              !
 !    See License_ROMS.txt                                              !
 !=======================================================================
@@ -27,8 +27,10 @@
 !  G_r          Maintanenance respiration rate (1/day)                 !
 !  Kn           Half-saturation constant for nutrient limited growth   !
 !                 (millimoles/m3)                                      !
-!  Mor          Spatially and temporarily averaged mortality rate      !
-!                 (1/day)                                              !
+!  Mor_a        Mortality rate equation, Q10 amplitude term (1/day)    !
+!  Mor_b        Mortality rate equation, Q10 intercept term (1/day)    !
+!  Mor_Q10      Mortality rate equation, Q10 reaction rate base        !
+!  Mor_T0       Mortality rate equation, Q10 background temperature (C)!
 !  Tmin_growth  Coldest temperature limit used to compute temperature- !
 !                 dependent growth factor from cubic polynomial fit    !
 !                 based on available data (Celsius)                    !
@@ -66,17 +68,20 @@
       real(r8), allocatable :: G_eff(:)        ! m2/Watts/day
       real(r8), allocatable :: G_r(:)          ! 1/day
       real(r8), allocatable :: Kn(:)           ! millimoles/m3
-      real(r8), allocatable :: Mor(:)          ! 1/day
+      real(r8), allocatable :: Mor_a(:)        ! 1/day
+      real(r8), allocatable :: Mor_b(:)        ! 1/day
+      real(r8), allocatable :: Mor_Q10(:)      ! nondimensional
+      real(r8), allocatable :: Mor_T0(:)       ! Celsius
       real(r8), allocatable :: Tmin_growth(:)  ! Celsius
       real(r8), allocatable :: srad_Cdepth(:)  ! Watts/m2
       real(r8), allocatable :: wDino(:)        ! m/day
 !
 !  Mid-day of each month (YearDay = 0 for Jan 1, 00:00:00).
 !
-      real(r8), dimension(12) :: Month_MidDay =                         &
-     &          (/ 15.5_r8,  45.0_r8,  74.5_r8, 105.0_r8,               &
-     &            135.5_r8, 166.0_r8, 196.5_r8, 227.5_r8,               &
-     &            258.0_r8, 288.5_r8, 319.0_r8, 349.5_r8 /)
+      real(dp), dimension(12) :: Month_MidDay =                         &
+     &          (/ 15.5_dp,  45.0_dp,  74.5_dp, 105.0_dp,               &
+     &            135.5_dp, 166.0_dp, 196.5_dp, 227.5_dp,               &
+     &            258.0_dp, 288.5_dp, 319.0_dp, 349.5_dp /)
 !
 ! Monthly median germination potential.
 !
@@ -118,57 +123,105 @@
 !
       IF (.not.allocated(BioIter)) THEN
         allocate ( BioIter(Ngrids) )
+        Dmem(1)=Dmem(1)+REAL(Ngrids,r8)
       END IF
+
       IF (.not.allocated(AttS)) THEN
         allocate ( AttS(Ngrids) )
+        Dmem(1)=Dmem(1)+REAL(Ngrids,r8)
       END IF
+
       IF (.not.allocated(AttW)) THEN
         allocate ( AttW(Ngrids) )
+        Dmem(1)=Dmem(1)+REAL(Ngrids,r8)
       END IF
+
       IF (.not.allocated(DIN_Cdepth)) THEN
         allocate ( DIN_Cdepth(Ngrids) )
+        Dmem(1)=Dmem(1)+REAL(Ngrids,r8)
       END IF
+
       IF (.not.allocated(Dg)) THEN
         allocate ( Dg(Ngrids) )
+        Dmem(1)=Dmem(1)+REAL(Ngrids,r8)
       END IF
+
       IF (.not.allocated(E_dark)) THEN
         allocate ( E_dark(Ngrids) )
+        Dmem(1)=Dmem(1)+REAL(Ngrids,r8)
       END IF
+
       IF (.not.allocated(E_light)) THEN
         allocate ( E_light(Ngrids) )
+        Dmem(1)=Dmem(1)+REAL(Ngrids,r8)
       END IF
+
       IF (.not.allocated(Gmax)) THEN
         allocate ( Gmax(Ngrids) )
+        Dmem(1)=Dmem(1)+REAL(Ngrids,r8)
       END IF
+
       IF (.not.allocated(G_eff)) THEN
         allocate ( G_eff(Ngrids) )
+        Dmem(1)=Dmem(1)+REAL(Ngrids,r8)
       END IF
+
       IF (.not.allocated(G_r)) THEN
         allocate ( G_r(Ngrids) )
+        Dmem(1)=Dmem(1)+REAL(Ngrids,r8)
       END IF
+
       IF (.not.allocated(Kn)) THEN
         allocate ( Kn(Ngrids) )
+        Dmem(1)=Dmem(1)+REAL(Ngrids,r8)
       END IF
-      IF (.not.allocated(Mor)) THEN
-        allocate ( Mor(Ngrids) )
-      END IF
+
       IF (.not.allocated(Tmin_growth)) THEN
         allocate ( Tmin_growth(Ngrids) )
+        Dmem(1)=Dmem(1)+REAL(Ngrids,r8)
       END IF
+
       IF (.not.allocated(srad_Cdepth)) THEN
         allocate ( srad_Cdepth(Ngrids) )
+        Dmem(1)=Dmem(1)+REAL(Ngrids,r8)
       END IF
+
       IF (.not.allocated(wDino)) THEN
         allocate ( wDino(Ngrids) )
+        Dmem(1)=Dmem(1)+REAL(Ngrids,r8)
       END IF
+
+      IF (.not.allocated(Mor_a)) THEN
+        allocate ( Mor_a(Ngrids) )
+        Dmem(1)=Dmem(1)+REAL(Ngrids,r8)
+      END IF
+
+      IF (.not.allocated(Mor_b)) THEN
+        allocate ( Mor_b(Ngrids) )
+        Dmem(1)=Dmem(1)+REAL(Ngrids,r8)
+      END IF
+
+      IF (.not.allocated(Mor_Q10)) THEN
+        allocate ( Mor_Q10(Ngrids) )
+        Dmem(1)=Dmem(1)+REAL(Ngrids,r8)
+      END IF
+
+      IF (.not.allocated(Mor_T0)) THEN
+        allocate ( Mor_T0(Ngrids) )
+        Dmem(1)=Dmem(1)+REAL(Ngrids,r8)
+      END IF
+
 #ifdef TANGENT
       IF (.not.allocated(tl_wDino)) THEN
         allocate ( tl_wDino(Ngrids) )
+        Dmem(1)=Dmem(1)+REAL(Ngrids,r8)
       END IF
 #endif
+
 #ifdef ADJOINT
       IF (.not.allocated(ad_wDino)) THEN
         allocate ( ad_wDino(Ngrids) )
+        Dmem(1)=Dmem(1)+REAL(Ngrids,r8)
       END IF
 #endif
 !
@@ -176,6 +229,7 @@
 !
       IF (.not.allocated(idbio)) THEN
         allocate ( idbio(NBT) )
+        Dmem(1)=Dmem(1)+REAL(Ngrids,r8)
       END IF
 !
 !-----------------------------------------------------------------------

@@ -1,6 +1,6 @@
 # svn $Id$
 #::::::::::::::::::::::::::::::::::::::::::::::::::::: Hernan G. Arango :::
-# Copyright (c) 2002-2016 The ROMS/TOMS Group             Kate Hedstrom :::
+# Copyright (c) 2002-2020 The ROMS/TOMS Group             Kate Hedstrom :::
 #   Licensed under a MIT/X style license                                :::
 #   See License_ROMS.txt                                                :::
 #::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
@@ -28,9 +28,10 @@
 #                                                                       :::
 #::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
 
-NEED_VERSION := 3.80 3.81 3.82 3.82.90 4.0 4.1
-$(if $(filter $(MAKE_VERSION),$(NEED_VERSION)),,        \
- $(error This makefile requires one of GNU make version $(NEED_VERSION).))
+ifneq (3.80,$(firstword $(sort $(MAKE_VERSION) 3.80)))
+ $(error This makefile requires GNU make version 3.80 or higher. \
+		Your current version is: $(MAKE_VERSION))
+endif
 
 #--------------------------------------------------------------------------
 #  Initialize some things.
@@ -173,14 +174,14 @@ ifeq "$(strip $(SCRATCH_DIR))" "./"
 endif
 
 #--------------------------------------------------------------------------
-#  Notice that the token "libraries" is initialize with the ROMS/Utility
+#  Notice that the token "libraries" is initialized with the ROMS/Utility
 #  library to account for calls to objects in other ROMS libraries or
 #  cycling dependencies. These type of dependencies are problematic in
 #  some compilers during linking. This library appears twice at linking
 #  step (begining and almost the end of ROMS library list).
 #--------------------------------------------------------------------------
 
-  libraries  := $(SCRATCH_DIR)/libMODS.a
+   libraries := $(SCRATCH_DIR)/libNLM.a $(SCRATCH_DIR)/libUTIL.a
 
 #--------------------------------------------------------------------------
 #  Set Pattern rules.
@@ -230,21 +231,17 @@ endif
 
 MAKE_MACROS := $(shell echo ${HOME} | sed 's| |\\ |g')/make_macros.mk
 
-ifneq "$(MAKECMDGOALS)" "clean"
- MACROS := $(shell cpp -P $(ROMS_CPPFLAGS) Compilers/make_macros.h > \
-		$(MAKE_MACROS); $(CLEAN) $(MAKE_MACROS))
+ifneq ($(MAKECMDGOALS),clean)
+  MACROS := $(shell cpp -P $(ROMS_CPPFLAGS) Compilers/make_macros.h > \
+              $(MAKE_MACROS); $(CLEAN) $(MAKE_MACROS))
 
- GET_MACROS := $(wildcard $(SCRATCH_DIR)/make_macros.*)
+  GET_MACROS := $(wildcard $(SCRATCH_DIR)/make_macros.*)
 
- ifdef GET_MACROS
-  include $(SCRATCH_DIR)/make_macros.mk
-  $(if ,, $(warning INCLUDING FILE $(SCRATCH_DIR)/make_macros.mk \
-                    WHICH CONTAINS APPLICATION-DEPENDENT MAKE DEFINITIONS))
- else
-  include $(MAKE_MACROS)
-  $(if ,, $(warning INCLUDING FILE $(MAKE_MACROS) \
-                   WHICH CONTAINS APPLICATION-DEPENDENT MAKE DEFINITIONS))
- endif
+  ifdef GET_MACROS
+    include $(SCRATCH_DIR)/make_macros.mk
+  else
+    include $(MAKE_MACROS)
+  endif
 endif
 
 clean_list += $(MAKE_MACROS)
@@ -328,15 +325,15 @@ endef
 #  Set ROMS/TOMS executable file name.
 #--------------------------------------------------------------------------
 
-BIN := $(BINDIR)/oceanS
+BIN := $(BINDIR)/romsS
 ifdef USE_DEBUG
-  BIN := $(BINDIR)/oceanG
+  BIN := $(BINDIR)/romsG
 else
  ifdef USE_MPI
-   BIN := $(BINDIR)/oceanM
+   BIN := $(BINDIR)/romsM
  endif
  ifdef USE_OpenMP
-   BIN := $(BINDIR)/oceanO
+   BIN := $(BINDIR)/romsO
  endif
 endif
 
@@ -362,7 +359,11 @@ OS := $(patsubst sn%,UNICOS-sn,$(OS))
 
 CPU := $(shell uname -m | sed 's/[\/ ]/-/g')
 
-SVNREV ?= $(shell svnversion -n .)
+GITURL ?= $(shell git remote -v | grep ^origin.*\(fetch\)$ | cut -f 2 | cut -d ' ' -f 1)
+GITREV ?= $(shell git rev-parse --abbrev-ref HEAD) $(shell git log -1 | head -n 1)
+GITSTATUS ?= $(shell git status --porcelain | wc -l)
+SVNURL := $(shell svn info | grep '^URL:' | sed 's/URL: //')
+SVNREV := $(shell svn info | grep '^Revision:' | sed 's/Revision: //')
 
 ROOTDIR := $(shell pwd)
 
@@ -370,7 +371,7 @@ ifndef FORT
   $(error Variable FORT not set)
 endif
 
-ifneq "$(MAKECMDGOALS)" "clean"
+ifneq ($(MAKECMDGOALS),clean)
   include $(COMPILERS)/$(OS)-$(strip $(FORT)).mk
 endif
 
@@ -407,12 +408,17 @@ ifdef MY_ANALYTICAL
   CPPFLAGS += -D'MY_ANALYTICAL="$(MY_ANALYTICAL)"'
 endif
 
-ifdef SVNREV
-  CPPFLAGS += -D'SVN_REV="$(SVNREV)"'
-else
-  SVNREV := $(shell grep Revision ./ROMS/Version | sed 's/.* \([0-9]*\) .*/\1/')
-  CPPFLAGS += -D'SVN_REV="$(SVNREV)"'
+ifdef GITURL
+  CPPFLAGS += -D'GIT_URL="$(GITURL)"'
 endif
+ifdef GITREV
+  CPPFLAGS += -D'GIT_REV="$(GITREV)"'
+endif
+ifdef GITSTATUS
+  CPPFLAGS += -D'GIT_STATUS=$(GITSTATUS)'
+endif
+CPPFLAGS += -D'SVN_URL="$(SVNURL)"'
+CPPFLAGS += -D'SVN_REV="$(SVNREV)"'
 
 #--------------------------------------------------------------------------
 #  Build target directories.
@@ -433,6 +439,9 @@ endif
 ifdef USE_REPRESENTER
  modules  +=	ROMS/Representer \
 		ROMS/Representer/Biology
+endif
+ifdef USE_SEAICE
+ modules  +=	ROMS/Nonlinear/SeaIce
 endif
 ifdef USE_TANGENT
  modules  +=	ROMS/Tangent \
@@ -465,7 +474,7 @@ ifdef USE_REPRESENTER
 		ROMS/Representer/Biology
 endif
 ifdef USE_SEAICE
- includes +=	ROMS/SeaIce
+ includes +=	ROMS/Nonlinear/SeaIce
 endif
 ifdef USE_TANGENT
  includes +=	ROMS/Tangent \
@@ -481,9 +490,21 @@ ifdef MY_HEADER_DIR
  includes +=	$(MY_HEADER_DIR)
 endif
 
+ifdef USE_COAMPS
+ includes +=	$(COAMPS_LIB_DIR)
+endif
+
 ifdef USE_SWAN
  modules  +=	Waves/SWAN/Src
  includes +=	Waves/SWAN/Src
+endif
+
+ifdef USE_WRF
+ ifeq "$(strip $(WRF_LIB_DIR))" "$(WRF_SRC_DIR)"
+  includes +=	$(addprefix $(WRF_LIB_DIR)/,$(WRF_MOD_DIRS))
+ else
+  includes +=	$(WRF_LIB_DIR)
+ endif
 endif
 
  modules  +=	Master
@@ -511,20 +532,6 @@ $(SCRATCH_DIR):
 	$(shell $(TEST) -d $(SCRATCH_DIR) || $(MKDIR) $(SCRATCH_DIR) )
 
 #--------------------------------------------------------------------------
-#  Add profiling.
-#--------------------------------------------------------------------------
-
-# FFLAGS += -check bounds                 # ifort
-# FFLAGS += -C                            # pgi
-# FFLAGS += -xpg                          # Sun
-# FFLAGS += -pg                           # g95
-# FFLAGS += -qp                           # ifort
-# FFLAGS += -Mprof=func,lines             # pgi
-# FFLAGS += -Mprof=mpi,lines              # pgi
-# FFLAGS += -Mprof=mpi,hwcts              # pgi
-# FFLAGS += -Mprof=func                   # pgi
-
-#--------------------------------------------------------------------------
 #  Special CPP macros for mod_strings.F
 #--------------------------------------------------------------------------
 
@@ -536,7 +543,7 @@ $(SCRATCH_DIR)/mod_strings.f90: CPPFLAGS += -DMY_OS='"$(OS)"' \
 #  ROMS/TOMS libraries.
 #--------------------------------------------------------------------------
 
-MYLIB := libocean.a
+MYLIB := libroms.a
 
 .PHONY: libraries
 
@@ -584,7 +591,7 @@ $(SCRATCH_DIR)/MakeDepend: makefile \
                            $(SCRATCH_DIR)/$(NETCDF_MODFILE) \
                            $(SCRATCH_DIR)/$(TYPESIZES_MODFILE) \
                            | $(SCRATCH_DIR)
-	$(SFMAKEDEPEND) $(MDEPFLAGS) $(sources) > $(SCRATCH_DIR)/MakeDepend
+	@ $(SFMAKEDEPEND) $(MDEPFLAGS) $(sources) > $(SCRATCH_DIR)/MakeDepend
 	cp -p $(MAKE_MACROS) $(SCRATCH_DIR)
 
 .PHONY: depend
@@ -594,7 +601,7 @@ SFMAKEDEPEND := ./ROMS/Bin/sfmakedepend
 depend: $(SCRATCH_DIR)
 	$(SFMAKEDEPEND) $(MDEPFLAGS) $(sources) > $(SCRATCH_DIR)/MakeDepend
 
-ifneq "$(MAKECMDGOALS)" "clean"
+ifneq ($(MAKECMDGOALS),clean)
   -include $(SCRATCH_DIR)/MakeDepend
 endif
 
@@ -605,17 +612,17 @@ endif
 .PHONY: tarfile
 
 tarfile:
-		tar --exclude=".svn" -cvf roms-3_0.tar *
+		tar --exclude=".svn" -cvf roms-3_7.tar *
 
 .PHONY: zipfile
 
 zipfile:
-		zip -r roms-3_0.zip *
+		zip -r roms-3_7.zip *
 
 .PHONY: gzipfile
 
 gzipfile:
-		gzip -v roms-3_0.gzip *
+		gzip -v roms-3_7.gzip *
 
 #--------------------------------------------------------------------------
 #  Cleaning targets.

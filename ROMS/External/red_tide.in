@@ -2,7 +2,7 @@
 !
 !svn $Id$
 !========================================================= Hernan G. Arango ===
-!  Copyright (c) 2002-2016 The ROMS/TOMS Group                                !
+!  Copyright (c) 2002-2020 The ROMS/TOMS Group                                !
 !    Licensed under a MIT/X style license                                     !
 !    See License_ROMS.txt                                                     !
 !==============================================================================
@@ -48,21 +48,17 @@
 
        BioIter == 1
 
-! Maximum growth rate at optimal temperature and salinty [1/day]
+! Maximum growth rate at optimal temperature and salinity [1/day]
 
-          Gmax == 0.575d0                        ! Gmax
+          Gmax == 1.05d0                        ! Gmax
 
 ! Germination depth [cm]
 
-            Dg == 1.25d0                         ! Dg
+            Dg == 0.18d0                         ! Dg
 
 ! Nutrient half-saturation constant [millimoles/m3]
 
             Kn == 3.0d0                          ! Kn
-
-! Mortality rate [1/day]
-
-           Mor == 0.0250d0                       ! Mor
 
 ! Growth efficiency [m2/(Watts*day)]
 
@@ -111,6 +107,18 @@
 
          wDino == 10.0d0                         ! Wa
 
+! Mortality rate Q10 equation parameters, as a function of temperature:
+!
+!   M_rate = Mor_a * Mor_Q10^[(temperature-MOR_To)/10] + Mor_b
+
+         MOR_a == 0.04d0                         ! amplitude, 1/day
+
+         MOR_b == 0.03d0                         ! intercept, 1/day
+
+       MOR_Q10 == 10.0d0                         ! reaction rate base
+
+        MOR_T0 == 15.0d0                         ! background temperature (C)
+
 ! Harmonic/biharmonic horizontal diffusion of biological tracer for
 ! nonlinear model and adjoint-based algorithms: [1:NBT,Ngrids].
 
@@ -138,6 +146,38 @@
 ! internally: [1:NBT,Ngrids].
 
         TNUDG  == 0.0d0                          ! days
+
+! Set horizontal and vertical advection schemes for biological tracers.
+! A different advection scheme is allowed for each tracer. For example,
+! a positive-definite (monotonic) algorithm can be activated for
+! salinity and biological tracers, while a different one is set for
+! temperature. [1:NAT+NPT,Ngrids] values are expected.
+!
+!   Keyword    Advection Algorithm
+!
+!   A4         4th-order Akima (horizontal/vertical)
+!   C2         2nd-order centered differences (horizontal/vertical)
+!   C4         4th-order centered differences (horizontal/vertical)
+!   HSIMT      3th-order HSIMT-TVD (horizontal/vertical)
+!   MPDATA     recursive flux corrected MPDATA (horizontal/vertical)
+!   SPLINES    parabolic splines (only vertical)
+!   SU3        split third-order upstream (horizontal/vertical)
+!   U3         3rd-order upstream-biased (only horizontal)
+!
+! The user has the option of specifying the full Keyword or the first
+! two letters, regardless if using uppercase or lowercase. If nested
+! grids, specify values for each grid.
+
+   Hadvection == HSIMT                          ! idbio(1), dinoflagellate
+
+   Vadvection == HSIMT                          ! idbio(1), dinoflagellate
+
+! Adjoint-based algorithms can have different horizontal and schemes
+! for active and inert tracers.
+
+ad_Hadvection == U3                             ! idbio(:), compact
+
+ad_Vadvection == C4                             ! idbio(:), compact
 
 ! Set lateral boundary conditions keyword. Notice that a value is expected
 ! for each boundary segment per nested grid for each state variable.
@@ -174,7 +214,7 @@
 !
 !                   1       2       3       4
 
-   LBC(isTvar) ==   Per     Per     Per     Per     ! idbio(1), dinoflagellate
+   LBC(isTvar) ==   Gra     Gra    Gra    Clo     ! idbio(1), dinoflagellate
 
 ! Adjoint-based algorithms can have different lateral boundary
 ! conditions keywords.
@@ -207,6 +247,13 @@ ad_LBC(isTvar) ==   Per     Clo     Per     Clo     ! idbio(1), dinoflagellate
 
 Hout(idTvar) == T       ! ..., DINO               biological tracer
 Hout(idTsur) == F       ! ..., DINO_sflux         surface tracer flux
+
+! Logical switches (TRUE/FALSE) to activate writing of biological fields
+! into QUICKSAVE output files: [1:NBT,Ngrids].
+
+Qout(idTvar) == F       ! ..., DINO               biological tracer
+Qout(idsurT) == F       ! ..., DINO_sur           surface biological tracer
+Qout(idTsur) == F       ! ..., DINO_sflux         surface tracer flux
 
 ! Logical switches (TRUE/FALSE) to activate writing of time-averaged fields
 ! into AVERAGE output file: [1:NBT,Ngrids].
@@ -261,7 +308,7 @@ Dout(iTvdif) == T       ! ..., DINO_vdiff         vertical diffusion
 !                   the nonlinear implicit solution.
 !
 !
-!  Gmax           Maximum growth rate at optimal temperature and salinty
+!  Gmax           Maximum growth rate at optimal temperature and salinity
 !                   (1/day)
 !
 !  Dg             Mean depth (cm) of sediment over which cysts are able to
@@ -269,8 +316,6 @@ Dout(iTvdif) == T       ! ..., DINO_vdiff         vertical diffusion
 !
 !  Kn             Half-saturation constant for nutrient limited growth
 !                   (millimoles/m3)
-!
-!  Mor            Spatially and temporarily averaged mortality rate (1/day)
 !
 !  G_eff          Growth efficiency (m2/Watts/day)
 !
@@ -308,6 +353,21 @@ Dout(iTvdif) == T       ! ..., DINO_vdiff         vertical diffusion
 !                   flux semi-Lagrangian algorithm is upward vertical motion
 !                   (swimming, floating) is positive whereas downward vertical
 !                   motion (sinking) is negative.
+!
+!------------------------------------------------------------------------------
+! Dinoflagellate (Alexandrium Fundyense) mortality rate Q10 equation
+! parameters, as a function of temperature:
+!
+!   M_rate = Mor_a * Mor_Q10^[(temperature-Mor_To)/10] + Mor_b
+!------------------------------------------------------------------------------
+!
+!  MOR_a          Mortality rate equation, Q10 amplitude term (1/day)
+!
+!  MOR_b          Mortality rate equation, Q10 intercept term (1/day)
+!
+!  MOR_Q10        Mortality rate equation, Q10 reaction rate base (unitless)
+!
+!  MOR_T0         Mortality rate equation, background temperature (Celsius)
 !
 !------------------------------------------------------------------------------
 ! Physical Parameters, [1:NBT,1:Ngrids] values are expected.
@@ -372,6 +432,93 @@ Dout(iTvdif) == T       ! ..., DINO_vdiff         vertical diffusion
 !
 !  TNUDG          Nudging time scale (days), [1:NBT,1:Ngrids]. Inverse scale
 !                   will be computed internally.
+!
+!------------------------------------------------------------------------------
+! Tracer advection scheme.
+!------------------------------------------------------------------------------
+!
+! It is more advantageous to set the horizontal and vertical advection schemes
+! for each tracer with switches instead of a single CPP flag for all of them.
+! Positive-definite and monotonic algorithms (i.e., MPDATA and HSIMT) are
+! appropriate and useful for positive fields like salinity, inert, biological,
+! and sediment tracers.  However, since the temperature has a dynamic range
+! with negative and positive values in the ocean, other advection schemes are
+! more appropriate.
+!
+! Currently, the following tracer advection schemes are available and are
+! activated using the associated Keyword:
+!
+!   Keyword    Advection Algorithm
+!
+!   A4         4th-order Akima (horizontal/vertical)
+!   C2         2nd-order centered differences (horizontal/vertical)
+!   C4         4th-order centered differences (horizontal/vertical)
+!   HSIMT      3th-order HSIMT with TVD limiter (horizontal/vertical)
+!   MPDATA     recursive flux corrected MPDATA (horizontal/vertical)
+!   SPLINES    parabolic splines reconstruction (only vertical)
+!   SU3        split third-order upstream (horizontal/vertical)
+!   U3         3rd-order upstresm-bias (only horizontal)
+!
+! The user has the option of specifying the full Keyword or the first
+! two letters, regardless if using uppercase or lowercase.
+!
+! If using either HSIMT (Wu and Zhu, 2010) or MPDATA (Margolin and
+! Smolarkiewicz, 1998) options, the user needs to set the same scheme
+! for both horizontal and vertical advection to preserve monotonicity.
+!
+! Hadvection     Horizontal advection for each active (temperature and
+!                  salinity) and inert tracers, [1:NAT+NPT,Ngrids]
+!                  values are expected.
+!
+! Vadvection     Vertical advection for each active (temperature and
+!                  salinity) and inert tracers, [1:NAT+NPT,Ngrids]
+!                  values are expected.
+!
+! ad_Hadvection  Horizontal advection for each active (temperature and
+!                  salinity) and inert tracers in the adjoint-based
+!                  algorithms, [1:NAT+NPT,Ngrids] values are expected.
+!
+! ad_Vadvection  Vertical advection for each active (temperature and
+!                  salinity) and inert tracers in the adjoint-based
+!                  algorithms, [1:NAT+NPT,Ngrids] values are expected.
+!
+! Examples:
+!
+!  Hadvection == A4       \                     ! temperature
+!                MPDATA   \                     ! salinity
+!                HSIMT    \                     ! dye_01, inert(1)
+!                HSIMT                          ! dy2_02, inert(2)
+!
+!  Vadvection == A4       \                     ! temperature
+!                MPDATA   \                     ! salinity
+!                HSIMT    \                     ! dye_01, inert(1)
+!                HSIMT                          ! dye_02, inert(2)
+!
+! or in nested applications
+!
+!  Hadvection == U3       \                     ! temperature, Grid 1
+!                HSIMT    \                     ! salinity,    Grid 1
+!                U3       \                     ! temperature, Grid 2
+!                HSIMT    \                     ! salinity,    Grid 2
+!                U3       \                     ! temperature, Grid 3
+!                HSIMT                          ! salinity,    Grid 3
+!
+!  Vadvection == C4       \                     ! temperature, Grid 1
+!                HSIMT    \                     ! salinity,    Grid 1
+!                C4       \                     ! temperature, Grid 2
+!                HSIMT    \                     ! salinity,    Grid 2
+!                C4       \                     ! temperature, Grid 3
+!                HSIMT                          ! salinity,    Grid 3
+!
+! It is convinient to use the compact specification format for biological and
+! sediment passive tracers as:
+!
+!  Hadvection == HSIMT                          ! idbio(:), compact
+!
+!  Vadvection == HSIMT                          ! idbio(:), compact
+!
+! when all the passive tracers have the same horizontal and vertical tracer
+! advection scheme.
 !
 !------------------------------------------------------------------------------
 ! Lateral boundary conditions parameters.
@@ -527,6 +674,21 @@ Dout(iTvdif) == T       ! ..., DINO_vdiff         vertical diffusion
 !                   Hout(idTsur)              biological tracers surface flux
 !
 !                   idTvar(idbio(1))=iDino    Dinoflagellate concentration
+!
+!------------------------------------------------------------------------------
+! Logical switches (T/F) to activate writing of fields into QUICKSAVE file.
+!------------------------------------------------------------------------------
+!
+!  Qout             Logical switches to write out biological fields into
+!                     output QUICKSAVE NetCDF file, [1:NBT,1:Ngrids] values
+!                     are expected:
+!
+!                     Qout(idTvar)      biological tracers
+!                     Qout(idsurT)      surface biological tracers
+!                     Qout(idTsur)      biological tracers surface flux
+!
+!                     The idTvar(idbio(:)), idsurR(idbio(:)), and
+!                     idTsur(idbio(:)) indices are provided above.
 !
 !------------------------------------------------------------------------------
 ! Logical switches (T/F) to activate writing of fields into AVERAGE file.

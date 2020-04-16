@@ -1,7 +1,7 @@
 /*
 ** svn $Id$
 *******************************************************************************
-** Copyright (c) 2002-2016 The ROMS/TOMS Group                               **
+** Copyright (c) 2002-2020 The ROMS/TOMS Group                               **
 **   Licensed under a MIT/X style license                                    **
 **   See License_ROMS.txt                                                    **
 *******************************************************************************
@@ -9,7 +9,7 @@
 ** Options for the California Current System, 1/3 degree resolution.
 **
 ** Application flag:   WC13
-** Input script:       ocean_wc13.in
+** Input script:       roms_wc13.in
 **                     s4dvar.in
 **
 ** Available Drivers options: choose only one and activate it in the
@@ -60,8 +60,6 @@
 #define SPLINES_VDIFF
 #define SPLINES_VVISC
 #define TS_DIF2
-#define TS_U3HADVECTION
-#define TS_C4VADVECTION
 #define SOLVE3D
 #define SALINITY
 #define NONLIN_EOS

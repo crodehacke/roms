@@ -1,7 +1,7 @@
 /*
 ** svn $Id$
 *******************************************************************************
-** Copyright (c) 2002-2016 The ROMS/TOMS Group                               **
+** Copyright (c) 2002-2020 The ROMS/TOMS Group                               **
 **   Licensed under a MIT/X style license                                    **
 **   See License_ROMS.txt                                                    **
 *******************************************************************************
@@ -9,7 +9,7 @@
 ** Options for Upwelling Test.
 **
 ** Application flag:   UPWELLING
-** Input script:       ocean_upwelling.in
+** Input script:       roms_upwelling.in
 */
 
 #define UV_ADV
@@ -20,9 +20,6 @@
 #define MIX_S_UV
 #define SPLINES_VDIFF
 #define SPLINES_VVISC
-#define TS_U3HADVECTION
-#define TS_C4VADVECTION
-#undef  TS_MPDATA
 #define DJ_GRADPS
 #define TS_DIF2
 #undef  TS_DIF4
@@ -32,7 +29,6 @@
 #define SALINITY
 #define SOLVE3D
 #define AVERAGES
-#undef HISTORY2
 #define DIAGNOSTICS_TS
 #define DIAGNOSTICS_UV
 

@@ -14,10 +14,6 @@
           real(r8), pointer :: ai(:,:,:)
           real(r8), pointer :: hi(:,:,:)
           real(r8), pointer :: hsn(:,:,:)
-# ifdef MELT_PONDS
-          real(r8), pointer :: apond(:,:,:)
-          real(r8), pointer :: hpond(:,:,:)
-# endif
           real(r8), pointer :: ageice(:,:,:)
           real(r8), pointer :: io_mflux(:,:)
           real(r8), pointer :: wfr(:,:)
@@ -28,6 +24,7 @@
           real(r8), pointer :: wdiv(:,:)
           real(r8), pointer :: tis(:,:)
           real(r8), pointer :: ti(:,:,:)
+          real(r8), pointer :: t2(:,:)
           real(r8), pointer :: enthalpi(:,:,:)
           real(r8), pointer :: hage(:,:,:)
           real(r8), pointer :: utau_iw(:,:)
@@ -36,6 +33,7 @@
           real(r8), pointer :: coef_ice_heat(:,:)
           real(r8), pointer :: rhs_ice_heat(:,:)
           real(r8), pointer :: pice(:,:)
+          real(r8), pointer :: rfaci(:,:)
 #ifdef ICE_STRENGTH_QUAD
           real(r8), pointer :: pstar_grid(:,:)
 #endif
@@ -56,12 +54,12 @@
           real(r8), pointer :: sig22(:,:,:)
           real(r8), pointer :: sig12(:,:,:)
 
-# if defined ICE_BIO  
+#if defined ICE_BIO
           real(r8), pointer ::IcePhL(:,:,:)
           real(r8), pointer ::IceNO3(:,:,:)
           real(r8), pointer ::IceNH4(:,:,:)
           integer, pointer ::IceLog(:,:,:)
-# endif
+#endif
 
         END TYPE T_ICE
 
@@ -99,10 +97,6 @@
       allocate ( ICE(ng) % ai(LBi:UBi,LBj:UBj,2) )
       allocate ( ICE(ng) % hi(LBi:UBi,LBj:UBj,2) )
       allocate ( ICE(ng) % hsn(LBi:UBi,LBj:UBj,2) )
-# ifdef MELT_PONDS
-      allocate ( ICE(ng) % apond(LBi:UBi,LBj:UBj,2) )
-      allocate ( ICE(ng) % hpond(LBi:UBi,LBj:UBj,2) )
-# endif
       allocate ( ICE(ng) % ageice(LBi:UBi,LBj:UBj,2) )
       allocate ( ICE(ng) % io_mflux(LBi:UBi,LBj:UBj) )
       allocate ( ICE(ng) % wfr(LBi:UBi,LBj:UBj) )
@@ -113,6 +107,7 @@
       allocate ( ICE(ng) % wdiv(LBi:UBi,LBj:UBj) )
       allocate ( ICE(ng) % tis(LBi:UBi,LBj:UBj) )
       allocate ( ICE(ng) % ti(LBi:UBi,LBj:UBj,2) )
+      allocate ( ICE(ng) % t2(LBi:UBi,LBj:UBj) )
       allocate ( ICE(ng) % enthalpi(LBi:UBi,LBj:UBj,2) )
       allocate ( ICE(ng) % hage(LBi:UBi,LBj:UBj,2) )
       allocate ( ICE(ng) % utau_iw(LBi:UBi,LBj:UBj) )
@@ -121,6 +116,7 @@
       allocate ( ICE(ng) % coef_ice_heat(LBi:UBi,LBj:UBj) )
       allocate ( ICE(ng) % rhs_ice_heat(LBi:UBi,LBj:UBj) )
       allocate ( ICE(ng) % pice(LBi:UBi,LBj:UBj) )
+      allocate ( ICE(ng) % rfaci(LBi:UBi,LBj:UBj) )
 #ifdef ICE_STRENGTH_QUAD
       allocate ( ICE(ng) % pstar_grid(LBi:UBi,LBj:UBj) )
 #endif
@@ -141,7 +137,7 @@
       allocate ( ICE(ng) % sig22(LBi:UBi,LBj:UBj,2) )
       allocate ( ICE(ng) % sig12(LBi:UBi,LBj:UBj,2) )
 
-# if defined ICE_BIO  
+# if defined ICE_BIO
       allocate (ICE(ng) % IcePhL(LBi:UBi,LBj:UBj,2) )
       allocate (ICE(ng) % IceNO3(LBi:UBi,LBj:UBj,2) )
       allocate (ICE(ng) % IceNH4(LBi:UBi,LBj:UBj,2) )
@@ -233,12 +229,6 @@
 # endif
           ICE(ng) % hsn(i,j,1) = IniVal
           ICE(ng) % hsn(i,j,2) = IniVal
-# ifdef MELT_PONDS
-          ICE(ng) % apond(i,j,1) = IniVal
-          ICE(ng) % apond(i,j,2) = IniVal
-          ICE(ng) % hpond(i,j,1) = IniVal
-          ICE(ng) % hpond(i,j,2) = IniVal
-# endif
           ICE(ng) % ageice(i,j,1) = IniVal
           ICE(ng) % ageice(i,j,2) = IniVal
           ICE(ng) % io_mflux(i,j) = IniVal
@@ -251,6 +241,7 @@
           ICE(ng) % tis(i,j) = IniVal
           ICE(ng) % ti(i,j,1) = IniVal
           ICE(ng) % ti(i,j,2) = IniVal
+          ICE(ng) % t2(i,j) = IniVal
           ICE(ng) % enthalpi(i,j,1) = IniVal
           ICE(ng) % enthalpi(i,j,2) = IniVal
           ICE(ng) % hage(i,j,1) = IniVal
@@ -261,6 +252,7 @@
           ICE(ng) % coef_ice_heat(i,j) = IniVal
           ICE(ng) % rhs_ice_heat(i,j) = IniVal
           ICE(ng) % pice(i,j) = IniVal
+          ICE(ng) % rfaci(i,j) = 1.0_r8
 #ifdef ICE_STRENGTH_QUAD
           ICE(ng) % pstar_grid(i,j) = IniVal
 #endif
@@ -284,7 +276,7 @@
           ICE(ng) % sig12(i,j,1) = IniVal
           ICE(ng) % sig12(i,j,2) = IniVal
 
-# if defined ICE_BIO  
+# if defined ICE_BIO
           ICE(ng) % IcePhL(i,j,1) = IniVal
           ICE(ng) % IcePhL(i,j,2) = IniVal
           ICE(ng) % IceNO3(i,j,1) = IniVal

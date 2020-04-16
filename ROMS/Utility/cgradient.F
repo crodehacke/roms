@@ -6,7 +6,7 @@
 !
 !svn $Id$
 !================================================== Hernan G. Arango ===
-!  Copyright (c) 2002-2016 The ROMS/TOMS Group       Andrew M. Moore   !
+!  Copyright (c) 2002-2020 The ROMS/TOMS Group       Andrew M. Moore   !
 !    Licensed under a MIT/X style license                              !
 !    See License_ROMS.txt                                              !
 !=======================================================================
@@ -161,7 +161,7 @@
 # include "tile.h"
 !
 # ifdef PROFILE
-      CALL wclock_on (ng, model, 36)
+      CALL wclock_on (ng, model, 43, __LINE__, __FILE__)
 # endif
       CALL cgradient_tile (ng, tile, model,                             &
      &                     LBi, UBi, LBj, UBj, LBij, UBij,              &
@@ -278,7 +278,7 @@
 # endif
      &                     OCEAN(ng) % ad_zeta)
 # ifdef PROFILE
-      CALL wclock_on (ng, model, 36)
+      CALL wclock_off (ng, model, 43, __LINE__, __FILE__)
 # endif
       RETURN
       END SUBROUTINE cgradient
@@ -375,12 +375,12 @@
       USE mod_fourdvar
       USE mod_iounits
       USE mod_scalars
-
-# ifdef DISTRIBUTE
 !
+# ifdef DISTRIBUTE
       USE distribute_mod, ONLY : mp_bcastf, mp_bcasti
 # endif
       USE state_copy_mod, ONLY : state_copy
+      USE strings_mod,    ONLY : FoundError
 !
 !  Imported variable declarations.
 !
@@ -716,7 +716,8 @@
      &                nl_ubar, nl_vbar,                                 &
 # endif
      &                nl_zeta)
-        IF (exit_flag.ne.NoError) RETURN
+        IF (FoundError(exit_flag, NoError, __LINE__,                    &
+     &                 __FILE__)) RETURN
 !
 !  Copy nl_var(L1) into ad_var(L2).
 !
@@ -806,14 +807,15 @@
      &                tl_ubar, tl_vbar,                                 &
 # endif
      &                tl_zeta)
-        IF (exit_flag.ne.NoError) RETURN
+        IF (FoundError(exit_flag, NoError, __LINE__,                    &
+     &                 __FILE__)) RETURN
 !
 !  Check for positive Hessian of J.
 !
         IF (cg_delta(innLoop,outLoop).le.0.0_r8) THEN
-          PRINT *, ' CG_DELTA not positive.'
-          PRINT *, ' CG_DELTA = ', cg_delta(innLoop,outLoop),           &
-     &             ', outer = ', outLoop, ', inner = ', innLoop
+          WRITE (stdout,*) ' CG_DELTA not positive.'
+          WRITE (stdout,*) ' CG_DELTA = ', cg_delta(innLoop,outLoop),   &
+     &                     ', outer = ', outLoop, ', inner = ', innLoop
           exit_flag=8
           RETURN
         END IF
@@ -872,7 +874,8 @@
      &              ad_ubar, ad_vbar,                                   &
 # endif
      &              ad_zeta)
-      IF (exit_flag.ne.NoError) RETURN
+      IF (FoundError(exit_flag, NoError, __LINE__,                      &
+     &               __FILE__)) RETURN
 !
 !  Compute new direction, d(k+1).
 !
@@ -921,7 +924,8 @@
      &                    d_ubar, d_vbar,                               &
 # endif
      &                    d_zeta)
-      IF (exit_flag.ne.NoError) RETURN
+      IF (FoundError(exit_flag, NoError, __LINE__,                      &
+     &               __FILE__)) RETURN
 !
 !-----------------------------------------------------------------------
 !  Calculate the reduction in the gradient norm by solving a
@@ -1036,7 +1040,8 @@
      &                 nl_ubar, nl_vbar,                                &
 # endif
      &                 nl_zeta)
-        IF (exit_flag.ne.NoError) RETURN
+        IF (FoundError(exit_flag, NoError, __LINE__,                    &
+     &                 __FILE__)) RETURN
       END IF
 !
 !-----------------------------------------------------------------------
@@ -1067,7 +1072,7 @@
           CALL mp_bcasti (ng, model, info)
 # endif
           IF (info.ne.0) THEN
-            PRINT *, ' Error in DSTEQR: info=', info
+            WRITE (stdout,*) ' Error in DSTEQR: info = ', info
             exit_flag=8
             RETURN
           END IF
@@ -1087,7 +1092,7 @@
 !
           DO i=1,innLoop
             IF (cg_Ritz(i,outLoop).lt.0.0_r8) THEN
-              PRINT *, ' Negative Ritz value found.'
+              WRITE (stdout,*) ' Negative Ritz value found.'
               exit_flag=8
               RETURN
             END IF
@@ -1170,10 +1175,12 @@
      &                          ad_ubar, ad_vbar,                       &
 # endif
      &                          ad_zeta)
-            IF (exit_flag.ne.NoError) RETURN
+            IF (FoundError(exit_flag, NoError, __LINE__,                &
+     &                     __FILE__)) RETURN
 
             IF (Master.and.(nConvRitz.eq.0)) THEN
-              PRINT *, ' No converged Hesssian eigenvectors found.'
+              WRITE (stdout,*) ' No converged Hesssian eigenvectors',   &
+     &                         ' found.'
             END IF
           END IF
         END IF
@@ -1322,7 +1329,8 @@
      &                nl_ubar, nl_vbar,                                 &
 # endif
      &                nl_zeta)
-        IF (exit_flag.ne.NoError) RETURN
+        IF (FoundError(exit_flag, NoError, __LINE__,                    &
+     &                 __FILE__)) RETURN
 !
 !  Copy nl_var(L1) into tl_var(Lout)
 !
@@ -1362,7 +1370,8 @@
 !-----------------------------------------------------------------------
 !
       CALL cg_write (ng, model, innLoop, outLoop)
-      IF (exit_flag.ne.NoError) RETURN
+      IF (FoundError(exit_flag, NoError, __LINE__,                      &
+     &               __FILE__)) RETURN
 !
 !  Report algorithm parameters.
 !
@@ -1486,9 +1495,10 @@
       USE mod_scalars
       USE mod_iounits
 !
-      USE state_addition_mod, ONLY : state_addition
-      USE state_copy_mod, ONLY : state_copy
+      USE state_addition_mod,   ONLY : state_addition
+      USE state_copy_mod,       ONLY : state_copy
       USE state_initialize_mod, ONLY : state_initialize
+      USE strings_mod,          ONLY : FoundError
 !
 !  Imported variable declarations.
 !
@@ -2253,7 +2263,8 @@
      &                     tl_ubar, tl_vbar,                            &
 # endif
      &                     tl_zeta)
-          IF (exit_flag.ne.NoError) RETURN
+          IF (FoundError(exit_flag, NoError, __LINE__,                  &
+     &                   __FILE__)) RETURN
 !
 !  Sum all previous normalized gradients:
 !
@@ -2372,7 +2383,7 @@
       USE mod_scalars
 !
 # ifdef DISTRIBUTE
-      USE distribute_mod, ONLY : mp_bcasti
+      USE distribute_mod,     ONLY : mp_bcasti
 # endif
 # ifdef ADJUST_BOUNDARY
       USE nf_fread2d_bry_mod, ONLY : nf_fread2d_bry
@@ -2380,10 +2391,11 @@
       USE nf_fread3d_bry_mod, ONLY : nf_fread3d_bry
 #  endif
 # endif
-      USE nf_fread2d_mod, ONLY : nf_fread2d
+      USE nf_fread2d_mod,     ONLY : nf_fread2d
 # ifdef SOLVE3D
-      USE nf_fread3d_mod, ONLY : nf_fread3d
+      USE nf_fread3d_mod,     ONLY : nf_fread3d
 # endif
+      USE strings_mod,        ONLY : FoundError
 !
 !  Imported variable declarations.
 !
@@ -2473,11 +2485,12 @@
 
       integer, dimension(4) :: Vsize
 
-      real(r8) :: Fmin, Fmax, scale
+      real(dp) :: scale
+      real(r8) :: Fmin, Fmax
 
 # include "set_bounds.h"
 !
-      SourceFile='cgradient_lanczos.h, read_state'
+      SourceFile=__FILE__ // ", read_state"
 !
 !-----------------------------------------------------------------------
 !  Read in requested model state record. Load data into state array
@@ -2488,7 +2501,8 @@
 !
       IF (ndef.gt.0) THEN
         CALL netcdf_open (ng, model, ncname, 0, ncid)
-        IF (exit_flag.ne.NoError) THEN
+        IF (FoundError(exit_flag, NoError, __LINE__,                    &
+     &                 __FILE__)) THEN
           WRITE (stdout,10) TRIM(ncname)
           RETURN
         END IF
@@ -2504,10 +2518,11 @@
 !  Read in free-surface.
 !
       gtype=r2dvar
-      scale=1.0_r8
+      scale=1.0_dp
       CALL netcdf_inq_varid (ng, model, ncname, Vname(1,idFsur),        &
      &                       ncid, varid)
-      IF (exit_flag.ne.NoError) RETURN
+      IF (FoundError(exit_flag, NoError, __LINE__,                      &
+     &               __FILE__)) RETURN
 
       status=nf_fread2d(ng, model, ncname, ncid,                        &
      &                  Vname(1,idFsur), varid,                         &
@@ -2518,7 +2533,8 @@
      &                  rmask,                                          &
 # endif
      &                  s_zeta(:,:,Lwrk))
-      IF (status.ne.nf90_noerr) THEN
+      IF (FoundError(status, nf90_noerr, __LINE__,                      &
+     &               __FILE__)) THEN
         IF (Master) THEN
           WRITE (stdout,20) TRIM(Vname(1,idFsur)), rec, TRIM(ncname)
         END IF
@@ -2534,10 +2550,11 @@
       IF (ANY(Lobc(:,isFsur,ng))) THEN
         ifield=idSbry(isFsur)
         gtype=r2dvar
-        scale=1.0_r8
+        scale=1.0_dp
         CALL netcdf_inq_varid (ng, model, ncname, Vname(1,ifield),      &
      &                         ncid, varid)
-        IF (exit_flag.ne.NoError) RETURN
+        IF (FoundError(exit_flag, NoError, __LINE__,                    &
+     &                 __FILE__)) RETURN
 
         status=nf_fread2d_bry (ng, model, ncname, ncid,                 &
      &                         Vname(1,ifield), varid,                  &
@@ -2545,7 +2562,8 @@
      &                         LBij, UBij, Nbrec(ng),                   &
      &                         scale, Fmin, Fmax,                       &
      &                         s_zeta_obc(:,:,:,Lwrk))
-        IF (status.ne.nf90_noerr) THEN
+        IF (FoundError(status, nf90_noerr, __LINE__,                    &
+     &                 __FILE__)) THEN
           IF (Master) THEN
             WRITE (stdout,20) TRIM(Vname(1,ifield)), rec, TRIM(ncname)
           END IF
@@ -2560,10 +2578,11 @@
 !  Read in 2D U-momentum component.
 !
       gtype=u2dvar
-      scale=1.0_r8
+      scale=1.0_dp
       CALL netcdf_inq_varid (ng, model, ncname, Vname(1,idUbar),        &
      &                       ncid, varid)
-      IF (exit_flag.ne.NoError) RETURN
+      IF (FoundError(exit_flag, NoError, __LINE__,                      &
+     &               __FILE__)) RETURN
 
       status=nf_fread2d(ng, model, ncname, ncid,                        &
      &                  Vname(1,idUbar), varid,                         &
@@ -2574,7 +2593,8 @@
      &                  umask,                                          &
 #  endif
      &                  s_ubar(:,:,Lwrk))
-      IF (status.ne.nf90_noerr) THEN
+      IF (FoundError(status, nf90_noerr, __LINE__,                      &
+     &               __FILE__)) THEN
         IF (Master) THEN
           WRITE (stdout,20) TRIM(Vname(1,idUbar)), rec, TRIM(ncname)
         END IF
@@ -2586,10 +2606,11 @@
 !  Read in 2D V-momentum component.
 !
       gtype=v2dvar
-      scale=1.0_r8
+      scale=1.0_dp
       CALL netcdf_inq_varid (ng, model, ncname, Vname(1,idVbar),        &
      &                       ncid, varid)
-      IF (exit_flag.ne.NoError) RETURN
+      IF (FoundError(exit_flag, NoError, __LINE__,                      &
+     &               __FILE__)) RETURN
 
       status=nf_fread2d(ng, model, ncname, ncid,                        &
      &                  Vname(1,idVbar), varid,                         &
@@ -2600,7 +2621,8 @@
      &                  vmask,                                          &
 #  endif
      &                  s_vbar(:,:,Lwrk))
-      IF (status.ne.nf90_noerr) THEN
+      IF (FoundError(status, nf90_noerr, __LINE__,                      &
+     &               __FILE__)) THEN
         IF (Master) THEN
           WRITE (stdout,20) TRIM(Vname(1,idVbar)), rec, TRIM(ncname)
         END IF
@@ -2616,10 +2638,11 @@
       IF (ANY(Lobc(:,isUbar,ng))) THEN
         ifield=idSbry(isUbar)
         gtype=u2dvar
-        scale=1.0_r8
+        scale=1.0_dp
         CALL netcdf_inq_varid (ng, model, ncname, Vname(1,ifield),      &
      &                         ncid, varid)
-        IF (exit_flag.ne.NoError) RETURN
+        IF (FoundError(exit_flag, NoError, __LINE__,                    &
+     &                 __FILE__)) RETURN
 
         status=nf_fread2d_bry (ng, model, ncname, ncid,                 &
      &                         Vname(1,ifield), varid,                  &
@@ -2627,7 +2650,8 @@
      &                         LBij, UBij, Nbrec(ng),                   &
      &                         scale, Fmin, Fmax,                       &
      &                         s_ubar_obc(:,:,:,Lwrk))
-        IF (status.ne.nf90_noerr) THEN
+        IF (FoundError(status, nf90_noerr, __LINE__,                    &
+     &                 __FILE__)) THEN
           IF (Master) THEN
             WRITE (stdout,20) TRIM(Vname(1,ifield)), rec, TRIM(ncname)
           END IF
@@ -2642,10 +2666,11 @@
       IF (ANY(Lobc(:,isVbar,ng))) THEN
         ifield=idSbry(isVbar)
         gtype=u2dvar
-        scale=1.0_r8
+        scale=1.0_dp
         CALL netcdf_inq_varid (ng, model, ncname, Vname(1,ifield),      &
      &                         ncid, varid)
-        IF (exit_flag.ne.NoError) RETURN
+        IF (FoundError(exit_flag, NoError, __LINE__,                    &
+     &                 __FILE__)) RETURN
 
         status=nf_fread2d_bry (ng, model, ncname, ncid,                 &
      &                         Vname(1,ifield), varid,                  &
@@ -2653,7 +2678,8 @@
      &                         LBij, UBij, Nbrec(ng),                   &
      &                         scale, Fmin, Fmax,                       &
      &                         s_vbar_obc(:,:,:,Lwrk))
-        IF (status.ne.nf90_noerr) THEN
+        IF (FoundError(status, nf90_noerr, __LINE__,                    &
+     &                 __FILE__)) THEN
           IF (Master) THEN
             WRITE (stdout,20) TRIM(Vname(1,ifield)), rec, TRIM(ncname)
           END IF
@@ -2668,10 +2694,11 @@
 !  Read surface momentum stress.
 !
       gtype=u3dvar
-      scale=1.0_r8
+      scale=1.0_dp
       CALL netcdf_inq_varid (ng, model, ncname, Vname(1,idUsms),        &
      &                       ncid, varid)
-      IF (exit_flag.ne.NoError) RETURN
+      IF (FoundError(exit_flag, NoError, __LINE__,                      &
+     &               __FILE__)) RETURN
 
       status=nf_fread3d(ng, model, ncname, ncid,                        &
      &                  Vname(1,idUsms), varid,                         &
@@ -2682,7 +2709,8 @@
      &                  umask,                                          &
 #  endif
      &                  s_ustr(:,:,:,Lwrk))
-      IF (status.ne.nf90_noerr) THEN
+      IF (FoundError(status, nf90_noerr, __LINE__,                      &
+     &               __FILE__)) THEN
         IF (Master) THEN
           WRITE (stdout,20) TRIM(Vname(1,idUsms)), rec, TRIM(ncname)
         END IF
@@ -2692,10 +2720,11 @@
       END IF
 
       gtype=v3dvar
-      scale=1.0_r8
+      scale=1.0_dp
       CALL netcdf_inq_varid (ng, model, ncname, Vname(1,idVsms),        &
      &                       ncid, varid)
-      IF (exit_flag.ne.NoError) RETURN
+      IF (FoundError(exit_flag, NoError, __LINE__,                      &
+     &               __FILE__)) RETURN
 
       status=nf_fread3d(ng, model, ncname, ncid,                        &
      &                  Vname(1,idVsms), varid,                         &
@@ -2706,7 +2735,8 @@
      &                  vmask,                                          &
 #  endif
      &                  s_vstr(:,:,:,Lwrk))
-      IF (status.ne.nf90_noerr) THEN
+      IF (FoundError(status, nf90_noerr, __LINE__,                      &
+     &               __FILE__)) THEN
         IF (Master) THEN
           WRITE (stdout,20) TRIM(Vname(1,idVsms)), rec, TRIM(ncname)
         END IF
@@ -2721,10 +2751,11 @@
 !  Read in 3D U-momentum component.
 !
       gtype=u3dvar
-      scale=1.0_r8
+      scale=1.0_dp
       CALL netcdf_inq_varid (ng, model, ncname, Vname(1,idUvel),        &
      &                       ncid, varid)
-      IF (exit_flag.ne.NoError) RETURN
+      IF (FoundError(exit_flag, NoError, __LINE__,                      &
+     &               __FILE__)) RETURN
 
       status=nf_fread3d(ng, model, ncname, ncid,                        &
      &                  Vname(1,idUvel), varid,                         &
@@ -2735,7 +2766,8 @@
      &                  umask,                                          &
 #  endif
      &                  s_u(:,:,:,Lwrk))
-      IF (status.ne.nf90_noerr) THEN
+      IF (FoundError(status, nf90_noerr, __LINE__,                      &
+     &               __FILE__)) THEN
         IF (Master) THEN
           WRITE (stdout,20) TRIM(Vname(1,idUvel)), rec, TRIM(ncname)
         END IF
@@ -2751,10 +2783,11 @@
       IF (ANY(Lobc(:,isUvel,ng))) THEN
         ifield=idSbry(isUvel)
         gtype=u3dvar
-        scale=1.0_r8
+        scale=1.0_dp
         CALL netcdf_inq_varid (ng, model, ncname, Vname(1,ifield),      &
      &                         ncid, varid)
-        IF (exit_flag.ne.NoError) RETURN
+        IF (FoundError(exit_flag, NoError, __LINE__,                    &
+     &                 __FILE__)) RETURN
 
         status=nf_fread3d_bry (ng, model, ncname, ncid,                 &
      &                         Vname(1,ifield), varid,                  &
@@ -2762,7 +2795,8 @@
      &                         LBij, UBij, 1, N(ng), Nbrec(ng),         &
      &                         scale, Fmin, Fmax,                       &
      &                         s_u_obc(:,:,:,:,Lwrk))
-        IF (status.ne.nf90_noerr) THEN
+        IF (FoundError(status, nf90_noerr, __LINE__,                    &
+     &                 __FILE__)) THEN
           IF (Master) THEN
             WRITE (stdout,20) TRIM(Vname(1,ifield)), rec, TRIM(ncname)
           END IF
@@ -2776,10 +2810,11 @@
 !  Read in 3D U-momentum component.
 !
       gtype=v3dvar
-      scale=1.0_r8
+      scale=1.0_dp
       CALL netcdf_inq_varid (ng, model, ncname, Vname(1,idVvel),        &
      &                       ncid, varid)
-      IF (exit_flag.ne.NoError) RETURN
+      IF (FoundError(exit_flag, NoError, __LINE__,                      &
+     &               __FILE__)) RETURN
 
       status=nf_fread3d(ng, model, ncname, ncid,                        &
      &                  Vname(1,idVvel), varid,                         &
@@ -2790,7 +2825,8 @@
      &                  vmask,                                          &
 #  endif
      &                  s_v(:,:,:,Lwrk))
-      IF (status.ne.nf90_noerr) THEN
+      IF (FoundError(status, nf90_noerr, __LINE__,                      &
+     &               __FILE__)) THEN
         IF (Master) THEN
           WRITE (stdout,20) TRIM(Vname(1,idVvel)), rec, TRIM(ncname)
         END IF
@@ -2806,10 +2842,11 @@
       IF (ANY(Lobc(:,isVvel,ng))) THEN
         ifield=idSbry(isVvel)
         gtype=u3dvar
-        scale=1.0_r8
+        scale=1.0_dp
         CALL netcdf_inq_varid (ng, model, ncname, Vname(1,ifield),      &
      &                         ncid, varid)
-        IF (exit_flag.ne.NoError) RETURN
+        IF (FoundError(exit_flag, NoError, __LINE__,                    &
+     &                 __FILE__)) RETURN
 
         status=nf_fread3d_bry (ng, model, ncname, ncid,                 &
      &                         Vname(1,ifield), varid,                  &
@@ -2817,7 +2854,8 @@
      &                         LBij, UBij, 1, N(ng), Nbrec(ng),         &
      &                         scale, Fmin, Fmax,                       &
      &                         s_v_obc(:,:,:,:,Lwrk))
-        IF (status.ne.nf90_noerr) THEN
+        IF (FoundError(status, nf90_noerr, __LINE__,                    &
+     &                 __FILE__)) THEN
           IF (Master) THEN
             WRITE (stdout,20) TRIM(Vname(1,ifield)), rec, TRIM(ncname)
           END IF
@@ -2831,11 +2869,12 @@
 !  Read in tracers.
 !
       gtype=r3dvar
-      scale=1.0_r8
+      scale=1.0_dp
       DO it=1,NT(ng)
         CALL netcdf_inq_varid (ng, model, ncname, Vname(1,idTvar(it)),  &
      &                         ncid, varid)
-        IF (exit_flag.ne.NoError) RETURN
+        IF (FoundError(exit_flag, NoError, __LINE__,                    &
+     &                 __FILE__)) RETURN
 
         status=nf_fread3d(ng, model, ncname, ncid,                      &
      &                    Vname(1,idTvar(it)), varid,                   &
@@ -2846,7 +2885,8 @@
      &                    rmask,                                        &
 #  endif
      &                    s_t(:,:,:,Lwrk,it))
-        IF (status.ne.nf90_noerr) THEN
+        IF (FoundError(status, nf90_noerr, __LINE__,                    &
+     &                 __FILE__)) THEN
           IF (Master) THEN
             WRITE (stdout,20) TRIM(Vname(1,idTvar(it))), rec,           &
      &                        TRIM(ncname)
@@ -2865,10 +2905,11 @@
         IF (ANY(Lobc(:,isTvar(it),ng))) THEN
           ifield=idSbry(isTvar(it))
           gtype=r3dvar
-          scale=1.0_r8
+          scale=1.0_dp
           CALL netcdf_inq_varid (ng, model, ncname, Vname(1,ifield),    &
      &                           ncid, varid)
-          IF (exit_flag.ne.NoError) RETURN
+          IF (FoundError(exit_flag, NoError, __LINE__,                  &
+     &                   __FILE__)) RETURN
 
           status=nf_fread3d_bry (ng, model, ncname, ncid,               &
      &                           Vname(1,ifield), varid,                &
@@ -2876,7 +2917,8 @@
      &                           LBij, UBij, 1, N(ng), Nbrec(ng),       &
      &                           scale, Fmin, Fmax,                     &
      &                           s_t_obc(:,:,:,:,Lwrk,it))
-          IF (status.ne.nf90_noerr) THEN
+          IF (FoundError(status, nf90_noerr, __LINE__,                  &
+     &                   __FILE__)) THEN
             IF (Master) THEN
               WRITE (stdout,20) TRIM(Vname(1,ifield)), rec, TRIM(ncname)
             END IF
@@ -2892,12 +2934,13 @@
 !  Read in surface tracers flux.
 !
       gtype=r3dvar
-      scale=1.0_r8
+      scale=1.0_dp
       DO it=1,NT(ng)
         IF (Lstflux(it,ng)) THEN
           CALL netcdf_inq_varid (ng, model, ncname,                     &
      &                           Vname(1,idTsur(it)), ncid, varid)
-          IF (exit_flag.ne.NoError) RETURN
+          IF (FoundError(exit_flag, NoError, __LINE__,                  &
+     &                   __FILE__)) RETURN
 
           status=nf_fread3d(ng, model, ncname, ncid,                    &
      &                      Vname(1,idTsur(it)), varid,                 &
@@ -2908,7 +2951,8 @@
      &                      rmask,                                      &
 #   endif
      &                      s_tflux(:,:,:,Lwrk,it))
-          IF (status.ne.nf90_noerr) THEN
+          IF (FoundError(status, nf90_noerr, __LINE__,                  &
+     &                   __FILE__)) THEN
             IF (Master) THEN
               WRITE (stdout,20) TRIM(Vname(1,idTsur(it))), rec,         &
      &                          TRIM(ncname)
@@ -3671,6 +3715,7 @@
       USE mod_scalars
 !
       USE state_dotprod_mod, ONLY : state_dotprod
+      USE strings_mod,       ONLY : FoundError
 !
 !  Imported variable declarations.
 !
@@ -4422,7 +4467,8 @@
      &                 tl_ubar, tl_vbar,                                &
 # endif
      &                 tl_zeta)
-      IF (exit_flag.ne.NoError) RETURN
+      IF (FoundError(exit_flag, NoError, __LINE__,                      &
+     &               __FILE__)) RETURN
 !
 !  Compute current iteration norm Delta(k) used to compute tri-diagonal
 !  matrix T(k) in the Lanczos recurrence.
@@ -4529,8 +4575,9 @@
       USE mod_scalars
 !
       USE state_addition_mod, ONLY : state_addition
-      USE state_dotprod_mod, ONLY : state_dotprod
-      USE state_scale_mod, ONLY : state_scale
+      USE state_dotprod_mod,  ONLY : state_dotprod
+      USE state_scale_mod,    ONLY : state_scale
+      USE strings_mod,        ONLY : FoundError
 !
 !  Imported variable declarations.
 !
@@ -4774,7 +4821,8 @@
      &                   tl_ubar, tl_vbar,                              &
 # endif
      &                   tl_zeta)
-        IF (exit_flag.ne.NoError) RETURN
+        IF (FoundError(exit_flag, NoError, __LINE__,                    &
+     &                 __FILE__)) RETURN
 !
 !  Substract previous orthonormal Lanczos vector:
 !
@@ -4865,7 +4913,8 @@
      &                   tl_ubar, tl_vbar,                              &
 # endif
      &                   tl_zeta)
-        IF (exit_flag.ne.NoError) RETURN
+        IF (FoundError(exit_flag, NoError, __LINE__,                    &
+     &                 __FILE__)) RETURN
 !
 !  Compute dot product <q(k+1), q(rec)>.
 !
@@ -5174,7 +5223,8 @@
      &                   tl_ubar, tl_vbar,                              &
 #  endif
      &                   tl_zeta)
-        IF (exit_flag.ne.NoError) RETURN
+        IF (FoundError(exit_flag, NoError, __LINE__,                    &
+     &                 __FILE__)) RETURN
 !
         CALL state_dotprod (ng, tile, model,                            &
      &                      LBi, UBi, LBj, UBj, LBij, UBij,             &
@@ -5302,7 +5352,8 @@
       USE mod_scalars
 !
       USE state_addition_mod, ONLY : state_addition
-      USE state_dotprod_mod, ONLY : state_dotprod
+      USE state_dotprod_mod,  ONLY : state_dotprod
+      USE strings_mod,        ONLY : FoundError
 !
 !  Imported variable declarations.
 !
@@ -5535,7 +5586,8 @@
      &                   tl_ubar, tl_vbar,                              &
 # endif
      &                   tl_zeta)
-        IF (exit_flag.ne.NoError) RETURN
+        IF (FoundError(exit_flag, NoError, __LINE__,                    &
+     &                 __FILE__)) RETURN
 !
 !  In this expression for FAC2, the term cg_QG gives the contribution
 !  to the gradient of Jo, and the term cg_Tmatrix gives the contribution
@@ -5709,11 +5761,12 @@
       USE mod_netcdf
       USE mod_scalars
 !
-      USE state_addition_mod, ONLY : state_addition
-      USE state_copy_mod, ONLY : state_copy
-      USE state_dotprod_mod, ONLY : state_dotprod
+      USE state_addition_mod,   ONLY : state_addition
+      USE state_copy_mod,       ONLY : state_copy
+      USE state_dotprod_mod,    ONLY : state_dotprod
       USE state_initialize_mod, ONLY : state_initialize
-      USE state_scale_mod, ONLY : state_scale
+      USE state_scale_mod,      ONLY : state_scale
+      USE strings_mod,          ONLY : FoundError
 !
 !  Imported variable declarations.
 !
@@ -5918,7 +5971,7 @@
 
 # include "set_bounds.h"
 !
-      SourceFile='cgradient_lanczos.h, hessian_evecs'
+      SourceFile=__FILE__ // ", hessian_evecs"
 !
 !-----------------------------------------------------------------------
 !  Calculate converged eigenvectors of the Hessian.
@@ -5939,7 +5992,8 @@
       CALL netcdf_put_ivar (ng, model, HSS(ng)%name, 'nConvRitz',       &
      &                      nConvRitz, (/0/), (/0/),                    &
      &                      ncid = HSS(ng)%ncid)
-      IF (exit_flag.ne.NoError) RETURN
+      IF (FoundError(exit_flag, NoError, __LINE__,                      &
+     &               __FILE__)) RETURN
 !
 !-----------------------------------------------------------------------
 !  First, premultiply the converged eigenvectors of the tridiagonal
@@ -6021,7 +6075,8 @@
      &                     tl_ubar, tl_vbar,                            &
 # endif
      &                     tl_zeta)
-          IF (exit_flag.ne.NoError) RETURN
+          IF (FoundError(exit_flag, NoError, __LINE__,                  &
+     &                   __FILE__)) RETURN
 !
 !  Compute Hessian eigenvectors:
 !
@@ -6069,7 +6124,8 @@
         LwrtState2d(ng)=.TRUE.
         CALL wrt_hessian (ng, Lold, Lold)
         LwrtState2d(ng)=.FALSE.
-        IF (exit_flag.ne.NoERRor) RETURN
+        IF (FoundError(exit_flag, NoError, __LINE__,                    &
+     &                 __FILE__)) RETURN
 
       END DO COLUMNS
 !
@@ -6120,7 +6176,8 @@
      &                   ad_ubar, ad_vbar,                              &
 # endif
      &                   ad_zeta)
-        IF (exit_flag.ne.NoError) RETURN
+        IF (FoundError(exit_flag, NoError, __LINE__,                    &
+     &                 __FILE__)) RETURN
 !
 !  Initialize nonlinear state arrays index L1 with just read Hessian
 !  vector in index Lold (initialize the summation):
@@ -6192,7 +6249,8 @@
      &                     tl_ubar, tl_vbar,                            &
 # endif
      &                     tl_zeta)
-          IF (exit_flag.ne.NoError) RETURN
+          IF (FoundError(exit_flag, NoError, __LINE__,                  &
+     &                   __FILE__)) RETURN
 !
 !  Compute dot product.
 !
@@ -6388,12 +6446,14 @@
         CALL netcdf_put_fvar (ng, model, HSS(ng)%name, 'Ritz',          &
      &                        Ritz(nvec:), (/nvec/), (/1/),             &
      &                        ncid = HSS(ng)%ncid)
-        IF (exit_flag.ne.NoError) RETURN
+        IF (FoundError(exit_flag, NoError, __LINE__,                    &
+     &                 __FILE__)) RETURN
 
         CALL netcdf_put_fvar (ng, model, HSS(ng)%name, 'Ritz_error',    &
      &                        RitzErr(nvec:), (/nvec/), (/1/),          &
      &                        ncid = HSS(ng)%ncid)
-        IF (exit_flag.ne.NoError) RETURN
+        IF (FoundError(exit_flag, NoError, __LINE__,                    &
+     &                 __FILE__)) RETURN
 !
 !  Replace record "nvec" of Hessian eigenvectors NetCDF with the
 !  normalized value in adjoint state arrays at index Lold.
@@ -6402,7 +6462,8 @@
         LwrtState2d(ng)=.TRUE.
         CALL wrt_hessian (ng, Lold, Lold)
         LwrtState2d(ng)=.FALSE.
-        IF (exit_flag.ne.NoERRor) RETURN
+        IF (FoundError(exit_flag, NoError, __LINE__,                    &
+     &                 __FILE__)) RETURN
 
       END DO
 
@@ -6430,6 +6491,8 @@
       USE mod_netcdf
       USE mod_scalars
 !
+      USE strings_mod, ONLY : FoundError
+!
       implicit none
 !
 !  Imported variable declarations
@@ -6440,7 +6503,7 @@
 !
       integer :: status
 !
-      SourceFile='cgradient_lanczos.h, cg_write'
+      SourceFile=__FILE__  // ", cg_write"
 !
 !-----------------------------------------------------------------------
 !  Write out conjugate gradient vectors.
@@ -6451,12 +6514,14 @@
       CALL netcdf_put_ivar (ng, model, DAV(ng)%name, 'outer',           &
      &                      outer, (/0/), (/0/),                        &
      &                      ncid = DAV(ng)%ncid)
-      IF (exit_flag.ne.NoError) RETURN
+      IF (FoundError(exit_flag, NoError, __LINE__,                      &
+     &               __FILE__)) RETURN
 
       CALL netcdf_put_ivar (ng, model, DAV(ng)%name, 'inner',           &
      &                      inner, (/0/), (/0/),                        &
      &                      ncid = DAV(ng)%ncid)
-      IF (exit_flag.ne.NoError) RETURN
+      IF (FoundError(exit_flag, NoError, __LINE__,                      &
+     &               __FILE__)) RETURN
 !
 !  Write out number of converged Ritz eigenvalues.
 !
@@ -6464,7 +6529,8 @@
         CALL netcdf_put_ivar (ng, model, DAV(ng)%name, 'nConvRitz',     &
      &                        nConvRitz, (/0/), (/0/),                  &
      &                        ncid = DAV(ng)%ncid)
-        IF (exit_flag.ne.NoError) RETURN
+        IF (FoundError(exit_flag, NoError, __LINE__,                    &
+     &                 __FILE__)) RETURN
       END IF
 !
 !  Write out converged Ritz eigenvalues.
@@ -6473,7 +6539,8 @@
         CALL netcdf_put_fvar (ng, model, DAV(ng)%name, 'Ritz',          &
      &                        Ritz, (/1/), (/nConvRitz/),               &
      &                        ncid = DAV(ng)%ncid)
-        IF (exit_flag.ne.NoError) RETURN
+        IF (FoundError(exit_flag, NoError, __LINE__,                    &
+     &                 __FILE__)) RETURN
       END IF
 !
 !  Write out conjugate gradient norms.
@@ -6482,7 +6549,8 @@
         CALL netcdf_put_fvar (ng, model, DAV(ng)%name, 'cg_beta',       &
      &                        cg_beta, (/1,1/), (/Ninner+1,Nouter/),    &
      &                        ncid = DAV(ng)%ncid)
-        IF (exit_flag.ne.NoError) RETURN
+        IF (FoundError(exit_flag, NoError, __LINE__,                    &
+     &                 __FILE__)) RETURN
       END IF
 !
 !  Write out Lanczos algorithm coefficients.
@@ -6491,14 +6559,16 @@
         CALL netcdf_put_fvar (ng, model, DAV(ng)%name, 'cg_delta',      &
      &                        cg_delta, (/1,1/), (/Ninner,Nouter/),     &
      &                        ncid = DAV(ng)%ncid)
-        IF (exit_flag.ne.NoError) RETURN
+        IF (FoundError(exit_flag, NoError, __LINE__,                    &
+     &                 __FILE__)) RETURN
       END IF
 !
       IF (innLoop.gt.0) THEN
         CALL netcdf_put_fvar (ng, model, DAV(ng)%name, 'cg_gamma',      &
      &                        cg_gamma, (/1,1/), (/Ninner,Nouter/),     &
      &                        ncid = DAV(ng)%ncid)
-        IF (exit_flag.ne.NoError) RETURN
+        IF (FoundError(exit_flag, NoError, __LINE__,                    &
+     &                 __FILE__)) RETURN
       END IF
 !
 !  Initial gradient normalization factor.
@@ -6507,7 +6577,8 @@
         CALL netcdf_put_fvar (ng, model, DAV(ng)%name, 'cg_Gnorm',      &
      &                        cg_Gnorm, (/1/), (/Nouter/),              &
      &                        ncid = DAV(ng)%ncid)
-        IF (exit_flag.ne.NoError) RETURN
+        IF (FoundError(exit_flag, NoError, __LINE__,                    &
+     &                 __FILE__)) RETURN
       END IF
 !
 !  Lanczos vector normalization factor.
@@ -6516,7 +6587,8 @@
         CALL netcdf_put_fvar (ng, model, DAV(ng)%name, 'cg_QG',         &
      &                        cg_QG, (/1,1/), (/Ninner,Nouter/),        &
      &                        ncid = DAV(ng)%ncid)
-        IF (exit_flag.ne.NoError) RETURN
+        IF (FoundError(exit_flag, NoError, __LINE__,                    &
+     &                 __FILE__)) RETURN
       END IF
 !
 !  Reduction in the gradient norm.
@@ -6525,7 +6597,8 @@
         CALL netcdf_put_fvar (ng, model, DAV(ng)%name, 'cg_Greduc',     &
      &                        cg_Greduc, (/1,1/), (/Ninner,Nouter/),    &
      &                        ncid = DAV(ng)%ncid)
-        IF (exit_flag.ne.NoError) RETURN
+        IF (FoundError(exit_flag, NoError, __LINE__,                    &
+     &                 __FILE__)) RETURN
       END IF
 !
 !  Lanczos recurrence tridiagonal matrix.
@@ -6534,7 +6607,8 @@
         CALL netcdf_put_fvar (ng, model, DAV(ng)%name, 'cg_Tmatrix',    &
      &                        cg_Tmatrix, (/1,1/), (/Ninner,3/),        &
      &                        ncid = DAV(ng)%ncid)
-        IF (exit_flag.ne.NoError) RETURN
+        IF (FoundError(exit_flag, NoError, __LINE__,                    &
+     &                 __FILE__)) RETURN
       END IF
 !
 !  Lanczos tridiagonal matrix, upper diagonal elements.
@@ -6543,7 +6617,8 @@
         CALL netcdf_put_fvar (ng, model, DAV(ng)%name, 'cg_zu',         &
      &                        cg_zu, (/1,1/), (/Ninner,Nouter/),        &
      &                        ncid = DAV(ng)%ncid)
-        IF (exit_flag.ne.NoError) RETURN
+        IF (FoundError(exit_flag, NoError, __LINE__,                    &
+     &                 __FILE__)) RETURN
       END IF
 !
 !  Eigenvalues of Lanczos recurrence relationship.
@@ -6552,7 +6627,8 @@
         CALL netcdf_put_fvar (ng, model, DAV(ng)%name, 'cg_Ritz',       &
      &                        cg_Ritz, (/1,1/), (/Ninner,Nouter/),      &
      &                        ncid = DAV(ng)%ncid)
-        IF (exit_flag.ne.NoError) RETURN
+        IF (FoundError(exit_flag, NoError, __LINE__,                    &
+     &                 __FILE__)) RETURN
       END IF
 !
 !  Eigenvalues relative error.
@@ -6561,7 +6637,8 @@
         CALL netcdf_put_fvar (ng, model, DAV(ng)%name, 'cg_RitzErr',    &
      &                        cg_RitzErr, (/1,1/), (/Ninner,Nouter/),   &
      &                        ncid = DAV(ng)%ncid)
-        IF (exit_flag.ne.NoError) RETURN
+        IF (FoundError(exit_flag, NoError, __LINE__,                    &
+     &                 __FILE__)) RETURN
       END IF
 !
 !  Eigenvectors of Lanczos recurrence relationship.
@@ -6570,7 +6647,8 @@
         CALL netcdf_put_fvar (ng, model, DAV(ng)%name, 'cg_zv',         &
      &                        cg_zv, (/1,1/), (/Ninner,Ninner/),        &
      &                        ncid = DAV(ng)%ncid)
-        IF (exit_flag.ne.NoError) RETURN
+        IF (FoundError(exit_flag, NoError, __LINE__,                    &
+     &                 __FILE__)) RETURN
       END IF
 !
 !  Write out Lanczos algorithm coefficients into Lanczos vectors
@@ -6582,17 +6660,39 @@
         CALL netcdf_put_fvar (ng, model, ADM(ng)%name, 'cg_beta',       &
      &                        cg_beta, (/1,1/), (/Ninner+1,Nouter/),    &
      &                        ncid = ADM(ng)%ncid)
-        IF (exit_flag.ne.NoError) RETURN
+        IF (FoundError(exit_flag, NoError, __LINE__,                    &
+     &                 __FILE__)) RETURN
 !
         CALL netcdf_put_fvar (ng, model, ADM(ng)%name, 'cg_delta',      &
      &                        cg_delta, (/1,1/), (/Ninner,Nouter/),     &
      &                        ncid = ADM(ng)%ncid)
-        IF (exit_flag.ne.NoError) RETURN
+        IF (FoundError(exit_flag, NoError, __LINE__,                    &
+     &                 __FILE__)) RETURN
 !
         CALL netcdf_put_fvar (ng, model, ADM(ng)%name, 'cg_zv',         &
      &                        cg_zv, (/1,1/), (/Ninner,Ninner/),        &
      &                        ncid = ADM(ng)%ncid)
-        IF (exit_flag.ne.NoError) RETURN
+        IF (FoundError(exit_flag, NoError, __LINE__,                    &
+     &                 __FILE__)) RETURN
+# ifdef EVOLVED_LCZ
+        CALL netcdf_put_fvar (ng, model, HSS(ng)%name, 'cg_beta',       &
+     &                        cg_beta, (/1,1/), (/Ninner+1,Nouter/),    &
+     &                        ncid = HSS(ng)%ncid)
+        IF (FoundError(exit_flag, NoError, __LINE__,                    &
+     &                 __FILE__)) RETURN
+!
+        CALL netcdf_put_fvar (ng, model, HSS(ng)%name, 'cg_delta',      &
+     &                        cg_delta, (/1,1/), (/Ninner,Nouter/),     &
+     &                        ncid = HSS(ng)%ncid)
+        IF (FoundError(exit_flag, NoError, __LINE__,                    &
+     &                 __FILE__)) RETURN
+!
+        CALL netcdf_put_fvar (ng, model, HSS(ng)%name, 'cg_zv',         &
+     &                        cg_zv, (/1,1/), (/Ninner,Ninner/),        &
+     &                        ncid = HSS(ng)%ncid)
+        IF (FoundError(exit_flag, NoError, __LINE__,                    &
+     &                 __FILE__)) RETURN
+# endif
       END IF
 !
 !-----------------------------------------------------------------------
@@ -6640,9 +6740,10 @@
       USE mod_ncparam
       USE mod_scalars
 !
-      USE state_addition_mod, ONLY : state_addition
-      USE state_dotprod_mod, ONLY : state_dotprod
+      USE state_addition_mod,   ONLY : state_addition
+      USE state_dotprod_mod,    ONLY : state_dotprod
       USE state_initialize_mod, ONLY : state_initialize
+      USE strings_mod,          ONLY : FoundError
 !
 !  Imported variable declarations.
 !
@@ -6826,7 +6927,8 @@
      &                   nl_ubar, nl_vbar,                              &
 # endif
      &                   nl_zeta)
-        IF (exit_flag.ne.NoError) RETURN
+        IF (FoundError(exit_flag, NoError, __LINE__,                    &
+     &                 __FILE__)) RETURN
 !
 !  Perform the summation:
 !
@@ -6904,7 +7006,8 @@
      &                 nl_ubar, nl_vbar,                                &
 # endif
      &                 nl_zeta)
-      IF (exit_flag.ne.NoError) RETURN
+      IF (FoundError(exit_flag, NoError, __LINE__,                      &
+     &               __FILE__)) RETURN
 !
 !  Compute the dot-product of the initial Lanczos vector with the
 !  current increment.
@@ -6955,7 +7058,7 @@
 !
       FOURDVAR(ng)%CostFun(0)=FOURDVAR(ng)%Cost0(outLoop)+              &
      &                        0.5_r8*dot(0)*cg_Gnorm(outLoop)
-      DO i=1,NstateVar(ng)
+      DO i=1,NobsVar(ng)
         FOURDVAR(ng)%CostFun(i)=0.0_r8
       END DO
 !
@@ -6997,7 +7100,8 @@
      &                nl_ubar, nl_vbar,                                 &
 # endif
      &                nl_zeta)
-        IF (exit_flag.ne.NoError) RETURN
+        IF (FoundError(exit_flag, NoError, __LINE__,                    &
+     &                 __FILE__)) RETURN
       END IF
 !
 !  Read the sum of previous v-space gradients from record 4 of ITL
@@ -7031,7 +7135,8 @@
      &                 nl_ubar, nl_vbar,                                &
 # endif
      &                 nl_zeta)
-      IF (exit_flag.ne.NoError) RETURN
+      IF (FoundError(exit_flag, NoError, __LINE__,                      &
+     &               __FILE__)) RETURN
 !
 !  Perform the summation:
 !
@@ -7116,7 +7221,7 @@
       FOURDVAR(ng)%BackCost(0)=0.5_r8*dot(0)
       FOURDVAR(ng)%ObsCost(0)=FOURDVAR(ng)%CostFun(0)-                  &
      &                        FOURDVAR(ng)%BackCost(0)
-      DO i=1,NstateVar(ng)
+      DO i=1,NobsVar(ng)
         FOURDVAR(ng)%BackCost(i)=0.0_r8
         FOURDVAR(ng)%ObsCost(i)=0.0_r8
       END DO
@@ -7166,8 +7271,9 @@
       USE distribute_mod, ONLY : mp_reduce
 # endif
       USE state_addition_mod, ONLY : state_addition
-      USE state_copy_mod, ONLY : state_copy
-      USE state_dotprod_mod, ONLY : state_dotprod
+      USE state_copy_mod,     ONLY : state_copy
+      USE state_dotprod_mod,  ONLY : state_dotprod
+      USE strings_mod,        ONLY : FoundError
 !
 !  Imported variable declarations.
 !
@@ -7325,11 +7431,13 @@
 !
         CALL netcdf_get_fvar (ng, model, ncname, 'cg_beta',             &
      &                        beta_lcz)
-        IF (exit_flag.ne. NoError) RETURN
+        IF (FoundError(exit_flag, NoError, __LINE__,                    &
+     &                 __FILE__)) RETURN
 
         CALL netcdf_get_fvar (ng, model, ncname, 'cg_zv',               &
      &                        zv_lcz)
-        IF (exit_flag.ne. NoError) RETURN
+        IF (FoundError(exit_flag, NoError, __LINE__,                    &
+     &                 __FILE__)) RETURN
 !
 !  Determine the number of Ritz vectors to use.
 !  For Lritz=.TRUE., choose HvecErr to be larger.
@@ -7416,7 +7524,8 @@
      &                         nl_ubar, nl_vbar,                        &
 # endif
      &                         nl_zeta)
-              IF (exit_flag.ne.NoError) RETURN
+              IF (FoundError(exit_flag, NoError, __LINE__,              &
+     &                       __FILE__)) RETURN
 !
 !  Compute the dot-product between the input vector and the Ninner+1
 !  Lanczos vector.
@@ -7509,7 +7618,8 @@
      &                     nl_ubar, nl_vbar,                            &
 # endif
      &                     nl_zeta)
-          IF (exit_flag.ne.NoError) RETURN
+          IF (FoundError(exit_flag, NoError, __LINE__,                  &
+     &                   __FILE__)) RETURN
 !
 !  Compute dot product between input vector and Hessian eigenvector.
 !  The input vector is in nl_var(L1) and the Hessian vector in
@@ -7659,7 +7769,8 @@
      &                       nl_ubar, nl_vbar,                          &
 # endif
      &                       nl_zeta)
-            IF (exit_flag.ne.NoError) RETURN
+            IF (FoundError(exit_flag, NoError, __LINE__,                &
+     &                     __FILE__)) RETURN
 !
             IF (Lscale.eq.2) THEN
               fac2=-facritz*Dotprod(0)/cg_Ritz(Ninner+1-nvec,nol)

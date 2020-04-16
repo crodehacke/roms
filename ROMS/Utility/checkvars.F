@@ -1,10 +1,10 @@
 #include "cppdefs.h"
-      SUBROUTINE checkvars (ng, model, ncname, string, Nrec, Nvar,      &
-     &                      tvarnam, get_var, have_var)
+      SUBROUTINE checkvars (ng, model, ncname, ncid, string, Nrec,      &
+     &                      Nvar,tvarnam, get_var, have_var)
 !
 !svn $Id$
 !================================================== Hernan G. Arango ===
-!  Copyright (c) 2002-2016 The ROMS/TOMS Group                         !
+!  Copyright (c) 2002-2020 The ROMS/TOMS Group                         !
 !    Licensed under a MIT/X style license                              !
 !    See License_ROMS.txt                                              !
 !=======================================================================
@@ -17,6 +17,7 @@
 !     ng         Nested grid number.                                   !
 !     model      Calling model identifier.                             !
 !     ncname     NetCDF file name.                                     !
+!     ncid       NetCDF file ID.                                       !
 !     string     Identification string.                                !
 !     Nvar       Size of logical switches arrays.                      !
 !                                                                      !
@@ -45,9 +46,11 @@
 #endif
       USE mod_scalars
 !
+      USE strings_mod, ONLY : FoundError
+!
 !  Imported variable declarations.
 !
-      integer, intent(in) :: ng, model, Nvar
+      integer, intent(in) :: ng, model, ncid, Nvar
       integer, intent(inout) :: Nrec
 
       character (len=*), intent(in) :: ncname
@@ -62,7 +65,7 @@
 !
       integer :: IDmod, i, itrc
 !
-      SourceFile='checkvars.F'
+      SourceFile=__FILE__
 !
 !-----------------------------------------------------------------------
 !  Determine state variables needed and check if they are available in
@@ -80,14 +83,18 @@
 !
 !  Inquire about the dimensions and check for consistency.
 !
-      CALL netcdf_check_dim (ng, IDmod, ncname)
-      IF (exit_flag.ne.NoError) RETURN
+      CALL netcdf_check_dim (ng, IDmod, ncname,                         &
+     &                       ncid = ncid)
+      IF (FoundError(exit_flag, NoError, __LINE__,                      &
+     &               __FILE__)) RETURN
       Nrec=rec_size
 !
 !  Inquire about the variables.
 !
-      CALL netcdf_check_var (ng, model, ncname)
-      IF (exit_flag.ne.NoError) RETURN
+      CALL netcdf_check_var (ng, IDmod, ncname,                         &
+     &                       ncid = ncid)
+      IF (FoundError(exit_flag, NoError, __LINE__,                      &
+     &               __FILE__)) RETURN
 !
 !  Initialize logical switches.
 !
@@ -97,11 +104,13 @@
       END DO
 !
 !  Determine state variables to read from input NetCDF file.  Notice
-!  that these state variable are only assigned if input flag model < 8.
-!  Higher values are used to process only boundary condition or
-!  surface forcing in the variational data assimilation algorithms.
+!  that these state variable are only assigned if input flag model < 12,
+!  model = 14, or model = 15. That is, all the state variables associated
+!  with ROMS prognostic equations.  The remaining values are used to
+!  process open boundary condition or surface forcing variable in the
+!  4D-Var control vector.
 !
-      IF (model.lt.8) THEN
+      IF ((model.le.11).or.(model.eq.14).or.(model.eq.15)) THEN
 #ifdef ANA_INITIAL
         IF (nrrec(ng).ne.0) THEN
           get_var(idFsur)=.TRUE.
@@ -122,8 +131,10 @@
         END IF
 #else
         get_var(idFsur)=.TRUE.
-        get_var(idUbar)=.TRUE.
-        get_var(idVbar)=.TRUE.
+        IF (model.ne.7) THEN        ! not needed by impulse forcing
+          get_var(idUbar)=.TRUE.
+          get_var(idVbar)=.TRUE.
+        END IF
 # ifdef SOLVE3D
         get_var(idUvel)=.TRUE.
         get_var(idVvel)=.TRUE.
@@ -203,45 +214,41 @@
 #  endif
 # endif
 # ifdef ICE_MODEL
-        get_var(idUice)=.true.
-        get_var(idVice)=.true.
-        get_var(idAice)=.true.
-        get_var(idHice)=.true.
-        get_var(idTice)=.true.
-        get_var(idHsno)=.true.
-#  ifdef MELT_PONDS
-        get_var(idApond)=.true.
-        get_var(idHpond)=.true.
-#  endif
-        get_var(idAgeice)=.true.
-        get_var(idTimid)=.true.
-        get_var(idSig11)=.true.
-        get_var(idSig22)=.true.
-        get_var(idSig12)=.true.
-        get_var(idS0mk)=.true.
-        get_var(idT0mk)=.true.
+        get_var(idUice)=.TRUE.
+        get_var(idVice)=.TRUE.
+        get_var(idAice)=.TRUE.
+        get_var(idHice)=.TRUE.
+        get_var(idTice)=.TRUE.
+        get_var(idHsno)=.TRUE.
+        get_var(idAgeice)=.TRUE.
+        get_var(idTimid)=.TRUE.
+        get_var(idSig11)=.TRUE.
+        get_var(idSig22)=.TRUE.
+        get_var(idSig12)=.TRUE.
+        get_var(idS0mk)=.TRUE.
+        get_var(idT0mk)=.TRUE.
 #  ifndef ICE_MOM_BULK
-        get_var(idChuiw)=.true.
-        get_var(idTauiw)=.true.
+        get_var(idChuiw)=.TRUE.
+        get_var(idTauiw)=.TRUE.
 #  endif
 #  ifdef PERFECT_RESTART
-        get_var(idUsms)=.true.
-        get_var(idVsms)=.true.
+        get_var(idUsms)=.TRUE.
+        get_var(idVsms)=.TRUE.
         DO itrc=1,NT(ng)
           get_var(idTsur(itrc))=.TRUE.
         END DO
 #  endif
 # endif
 # ifdef NCEP_FLUXES
-        get_var(idWg2d)=.true.
-        get_var(idCdd)=.true.
-        get_var(idChd)=.true.
-        get_var(idCed)=.true.
-        get_var(idWg2m)=.true.
-        get_var(idCdm)=.true.
-        get_var(idChm)=.true.
-        get_var(idCem)=.true.
-        get_var(idRhoa)=.true.
+        get_var(idWg2d)=.TRUE.
+        get_var(idCdd)=.TRUE.
+        get_var(idChd)=.TRUE.
+        get_var(idCed)=.TRUE.
+        get_var(idWg2m)=.TRUE.
+        get_var(idCdm)=.TRUE.
+        get_var(idChm)=.TRUE.
+        get_var(idCem)=.TRUE.
+        get_var(idRhoa)=.TRUE.
 # endif
 #endif
 #ifdef PERFECT_RESTART
@@ -261,7 +268,7 @@
           get_var(idRzet)=.TRUE.
           get_var(idRu2d)=.TRUE.
           get_var(idRv2d)=.TRUE.
-# if defined GLS_MIXING || defined MY25_MIXING
+# if defined TKE_MIXING
           get_var(idMtke)=.TRUE.
           get_var(idMtls)=.TRUE.
           get_var(idVmLS)=.TRUE.
@@ -275,11 +282,11 @@
       END IF
 #ifdef ADJUST_BOUNDARY
 !
-!  Determine 4DVar surface forcing variables to adjust.
+!  Determine 4DVar boundary variables to adjust.
 !
       IF ((model.eq.iADM).or.(model.eq.iTLM).or.(model.eq.iNLM).or.     &
-     &    (model.eq.iRPM).or.(model.eq.8).or.(model.eq.10).or.          &
-     &    (model.eq.12)) THEN
+     &    (model.eq.iRPM).or.(model.eq.5).or.(model.eq.12).or.          &
+     &    (model.eq.16)) THEN
         IF (ANY(Lobc(:,isFsur,ng))) THEN
           get_var(idSbry(isFsur))=.TRUE.
         END IF
@@ -309,8 +316,8 @@
 !  Determine 4DVar surface forcing variables to adjust.
 !
       IF ((model.eq.iADM).or.(model.eq.iTLM).or.(model.eq.iNLM).or.     &
-     &    (model.eq.iRPM).or.(model.eq.9).or.(model.eq.11).or.          &
-     &    (model.eq.12)) THEN
+     &    (model.eq.iRPM).or.(model.eq.5).or.(model.eq.13).or.          &
+     &    (model.eq.17)) THEN
 # ifdef ADJUST_STFLUX
         DO itrc=1,NT(ng)
           IF (Lstflux(itrc,ng)) THEN
@@ -379,7 +386,7 @@
           have_var(idVvel)=.TRUE.
         ELSE IF (TRIM(var_name(i)).eq.TRIM(Vname(1,idRv3d))) THEN
           have_var(idRv3d)=.TRUE.
-# if defined GLS_MIXING || defined MY25_MIXING || defined LMD_MIXING
+# if defined LMD_MIXING || defined TKE_MIXING
         ELSE IF (TRIM(var_name(i)).eq.TRIM(Vname(1,idVvis))) THEN
           have_var(idVvis)=.TRUE.
         ELSE IF (TRIM(var_name(i)).eq.TRIM(Vname(1,idTdif))) THEN
@@ -401,7 +408,7 @@
           have_var(idGhat(isalt))=.TRUE.
 #  endif
 # endif
-# if defined GLS_MIXING || defined MY25_MIXING
+# if defined TKE_MIXING
         ELSE IF (TRIM(var_name(i)).eq.TRIM(Vname(1,idMtke))) THEN
           have_var(idMtke)=.TRUE.
         ELSE IF (TRIM(var_name(i)).eq.TRIM(Vname(1,idMtls))) THEN
@@ -486,47 +493,41 @@
 # endif
 # ifdef ICE_MODEL
         IF (TRIM(var_name(i)).eq.TRIM(Vname(1,idUice))) THEN
-          have_var(idUice)=.true.
+          have_var(idUice)=.TRUE.
         ELSE IF (TRIM(var_name(i)).eq.TRIM(Vname(1,idVice))) THEN
-          have_var(idVice)=.true.
+          have_var(idVice)=.TRUE.
         ELSE IF (TRIM(var_name(i)).eq.TRIM(Vname(1,idAice))) THEN
-          have_var(idAice)=.true.
+          have_var(idAice)=.TRUE.
         ELSE IF (TRIM(var_name(i)).eq.TRIM(Vname(1,idHice))) THEN
-          have_var(idHice)=.true.
+          have_var(idHice)=.TRUE.
         ELSE IF (TRIM(var_name(i)).eq.TRIM(Vname(1,idTice))) THEN
-          have_var(idTice)=.true.
+          have_var(idTice)=.TRUE.
         ELSE IF (TRIM(var_name(i)).eq.TRIM(Vname(1,idHsno))) THEN
-          have_var(idHsno)=.true.
-#  ifdef MELT_PONDS
-        ELSE IF (TRIM(var_name(i)).eq.TRIM(Vname(1,idApond))) THEN
-          have_var(idApond)=.true.
-        ELSE IF (TRIM(var_name(i)).eq.TRIM(Vname(1,idHpond))) THEN
-          have_var(idHpond)=.true.
-#  endif
+          have_var(idHsno)=.TRUE.
         ELSE IF (TRIM(var_name(i)).eq.TRIM(Vname(1,idAgeice))) THEN
-          have_var(idAgeice)=.true.
+          have_var(idAgeice)=.TRUE.
         ELSE IF (TRIM(var_name(i)).eq.TRIM(Vname(1,idTimid))) THEN
-          have_var(idTimid)=.true.
+          have_var(idTimid)=.TRUE.
         ELSE IF (TRIM(var_name(i)).eq.TRIM(Vname(1,idSig11))) THEN
-          have_var(idSig11)=.true.
+          have_var(idSig11)=.TRUE.
         ELSE IF (TRIM(var_name(i)).eq.TRIM(Vname(1,idSig22))) THEN
-          have_var(idSig22)=.true.
+          have_var(idSig22)=.TRUE.
         ELSE IF (TRIM(var_name(i)).eq.TRIM(Vname(1,idSig12))) THEN
-          have_var(idSig12)=.true.
+          have_var(idSig12)=.TRUE.
         ELSE IF (TRIM(var_name(i)).eq.TRIM(Vname(1,idS0mk))) THEN
-          have_var(idS0mk)=.true.
+          have_var(idS0mk)=.TRUE.
         ELSE IF (TRIM(var_name(i)).eq.TRIM(Vname(1,idT0mk))) THEN
-          have_var(idT0mk)=.true.
+          have_var(idT0mk)=.TRUE.
         ELSE IF (TRIM(var_name(i)).eq.TRIM(Vname(1,idTauiw))) THEN
-          have_var(idTauiw)=.true.
+          have_var(idTauiw)=.TRUE.
         ELSE IF (TRIM(var_name(i)).eq.TRIM(Vname(1,idChuiw))) THEN
-          have_var(idChuiw)=.true.
+          have_var(idChuiw)=.TRUE.
         END IF
 #  if defined PERFECT_RESTART
         IF (TRIM(var_name(i)).eq.TRIM(Vname(1,idUsms))) THEN
-          have_var(idUsms)=.true.
+          have_var(idUsms)=.TRUE.
         ELSE IF (TRIM(var_name(i)).eq.TRIM(Vname(1,idVsms))) THEN
-          have_var(idVsms)=.true.
+          have_var(idVsms)=.TRUE.
         END IF
         DO itrc=1,NT(ng)
           IF (TRIM(var_name(i)).eq.TRIM(Vname(1,idTsur(itrc)))) THEN
@@ -537,23 +538,23 @@
 # endif
 # ifdef NCEP_FLUXES
         IF (TRIM(var_name(i)).eq.TRIM(Vname(1,idWg2d))) THEN
-          have_var(idWg2d)=.true.
+          have_var(idWg2d)=.TRUE.
         ELSE IF (TRIM(var_name(i)).eq.TRIM(Vname(1,idCdd))) THEN
-          have_var(idCdd)=.true.
+          have_var(idCdd)=.TRUE.
         ELSE IF (TRIM(var_name(i)).eq.TRIM(Vname(1,idChd))) THEN
-          have_var(idChd)=.true.
+          have_var(idChd)=.TRUE.
         ELSE IF (TRIM(var_name(i)).eq.TRIM(Vname(1,idCed))) THEN
-          have_var(idCed)=.true.
+          have_var(idCed)=.TRUE.
         ELSE IF (TRIM(var_name(i)).eq.TRIM(Vname(1,idWg2m))) THEN
-          have_var(idWg2m)=.true.
+          have_var(idWg2m)=.TRUE.
         ELSE IF (TRIM(var_name(i)).eq.TRIM(Vname(1,idCdm))) THEN
-          have_var(idCdm)=.true.
+          have_var(idCdm)=.TRUE.
         ELSE IF (TRIM(var_name(i)).eq.TRIM(Vname(1,idChm))) THEN
-          have_var(idChm)=.true.
+          have_var(idChm)=.TRUE.
         ELSE IF (TRIM(var_name(i)).eq.TRIM(Vname(1,idCem))) THEN
-          have_var(idCem)=.true.
+          have_var(idCem)=.TRUE.
         ELSE IF (TRIM(var_name(i)).eq.TRIM(Vname(1,idRhoa))) THEN
-          have_var(idRhoa)=.true.
+          have_var(idRhoa)=.TRUE.
         END IF
 # endif
 #endif
@@ -759,7 +760,7 @@
         END DO
       END IF
 # endif
-# if defined GLS_MIXING || defined MY25_MIXING
+# if defined TKE_MIXING
       IF (.not.have_var(idMtke).and.get_var(idMtke)) THEN
         IF (Master) WRITE (stdout,10) string, TRIM(Vname(1,idMtke)),    &
      &                                TRIM(ncname)
@@ -900,22 +901,6 @@
         exit_flag=2
         RETURN
       END IF
-#  ifdef MELT_PONDS
-      IF (.not.have_var(idApond)) THEN
-        IF (Master) WRITE (stdout,10) string,                           &
-     &                                TRIM(Vname(1,idApond)),           &
-     &                                TRIM(ncname)
-        exit_flag=2
-        RETURN
-      END IF
-      IF (.not.have_var(idHpond)) THEN
-        IF (Master) WRITE (stdout,10) string,                           &
-     &                                TRIM(Vname(1,idHpond)),           &
-     &                                TRIM(ncname)
-        exit_flag=2
-        RETURN
-      END IF
-#  endif
       IF (.not.have_var(idAgeice)) THEN
         IF (Master) WRITE (stdout,10) string,                           &
      &                                TRIM(Vname(1,idAgeice)),          &

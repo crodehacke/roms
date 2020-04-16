@@ -4,7 +4,7 @@
 !
 !svn $Id$
 !=======================================================================
-!  Copyright (c) 2002-2016 The ROMS/TOMS Group                         !
+!  Copyright (c) 2002-2020 The ROMS/TOMS Group                         !
 !    Licensed under a MIT/X style license                              !
 !    See License_ROMS.txt                           Hernan G. Arango   !
 !========================================== Alexander F. Shchepetkin ===
@@ -99,7 +99,10 @@
       real(r8) :: Ce, Cx, Ze
       real(r8) :: bry_pgr, bry_cor, bry_str, bry_val
       real(r8) :: cff, cff1, cff2, cff3, dt2d, dVde, dVdt, dVdx
-      real(r8) :: obc_in, obc_out, tau
+      real(r8) :: obc_in, obc_out, phi, tau
+#if defined ATM_PRESS && defined PRESS_COMPENSATE
+      real(r8) :: OneAtm, fac
+#endif
 
       real(r8), dimension(IminS:ImaxS,JminS:JmaxS) :: grad
 
@@ -119,6 +122,10 @@
         know=kstp
         dt2d=dtfast(ng)
       END IF
+#if defined ATM_PRESS && defined PRESS_COMPENSATE
+      OneAtm=1013.25_r8                  ! 1 atm = 1013.25 mb
+      fac=100.0_r8/(g*rho0)
+#endif
 !
 !-----------------------------------------------------------------------
 !  Lateral boundary conditions at the southern edge.
@@ -141,24 +148,27 @@
               dVde=vbar(i,Jstr+1,kout)-vbar(i,Jstr+2,kout)
 
               IF (LBC(isouth,isVbar,ng)%nudging) THEN
-                IF (LnudgeM2CLM(ng)) THEN
-                  obc_out=0.5_r8*                                       &
-     &                    (CLIMA(ng)%M2nudgcof(i,Jstr-1)+               &
-     &                     CLIMA(ng)%M2nudgcof(i,Jstr  ))
-                  obc_in =obcfac(ng)*obc_out
-                ELSE
+!               IF (LnudgeM2CLM(ng)) THEN
+!                 obc_out=0.5_r8*                                       &
+!    &                    (CLIMA(ng)%M2nudgcof(i,Jstr-1)+               &
+!    &                     CLIMA(ng)%M2nudgcof(i,Jstr  ))
+!                 obc_in =obcfac(ng)*obc_out
+!               ELSE
                   obc_out=M2obc_out(ng,isouth)
                   obc_in =M2obc_in (ng,isouth)
-                END IF
+!               END IF
                 IF ((dVdt*dVde).lt.0.0_r8) THEN
                   tau=obc_in
                 ELSE
                   tau=obc_out
                 END IF
+#ifdef IMPLICIT_NUDGING
+                IF (tau.gt.0.0_r8) tau=1.0_r8/tau
+#else
                 tau=tau*dt2d
+#endif
               END IF
 
-              IF ((dVdt*dVde).lt.0.0_r8) dVdt=0.0_r8
               IF ((dVdt*(grad(i  ,Jstr+1)+                              &
      &                   grad(i+1,Jstr+1))).gt.0.0_r8) THEN
                 dVdx=grad(i  ,Jstr+1)
@@ -166,6 +176,7 @@
                 dVdx=grad(i+1,Jstr+1)
               END IF
               cff=MAX(dVdx*dVdx+dVde*dVde,eps)
+              IF ((dVdt*dVde).lt.0.0_r8) dVdt=0.0_r8
 #ifdef RADIATION_2D
               Cx=MIN(cff,MAX(dVdt*dVdx,-cff))
 #else
@@ -184,9 +195,16 @@
      &                          (cff+Ce)
 
               IF (LBC(isouth,isVbar,ng)%nudging) THEN
+#ifdef IMPLICIT_NUDGING
+                phi=dt(ng)/(tau+dt(ng))
+                vbar(i,Jstr,kout)=(1.0_r8-phi)*vbar(i,Jstr,kout)+       &
+     &                            phi*BOUNDARY(ng)%vbar_south(i)
+
+#else
                 vbar(i,Jstr,kout)=vbar(i,Jstr,kout)+                    &
      &                            tau*(BOUNDARY(ng)%vbar_south(i)-      &
      &                                 vbar(i,Jstr,know))
+#endif
               END IF
 #ifdef MASKING
               vbar(i,Jstr,kout)=vbar(i,Jstr,kout)*                      &
@@ -272,10 +290,21 @@
      &                            zeta(i,Jstr  ,know)))
 #endif
               Ce=SQRT(g*cff)
+#if defined ATM_PRESS && defined PRESS_COMPENSATE
+              vbar(i,Jstr,kout)=bry_val-                                &
+     &                          Ce*(0.5_r8*                             &
+     &                              (zeta(i,Jstr-1,know)+               &
+     &                               zeta(i,Jstr  ,know)+               &
+     &                               fac*(FORCES(ng)%Pair(i,Jstr-1)+    &
+     &                                    FORCES(ng)%Pair(i,Jstr  )-    &
+     &                                    2.0_r8*OneAtm))-              &
+     &                              BOUNDARY(ng)%zeta_south(i))
+#else
               vbar(i,Jstr,kout)=bry_val-                                &
      &                          Ce*(0.5_r8*(zeta(i,Jstr-1,know)+        &
      &                                      zeta(i,Jstr  ,know))-       &
      &                              BOUNDARY(ng)%zeta_south(i))
+#endif
 #ifdef MASKING
               vbar(i,Jstr,kout)=vbar(i,Jstr,kout)*                      &
      &                          GRID(ng)%vmask(i,Jstr)
@@ -472,7 +501,9 @@
 # ifdef MASKING
                 bry_val=bry_val*GRID(ng)%vmask(i,Jstr)
 # endif
+# ifdef NESTING_DEBUG
                 BRY_CONTACT(isouth,cr)%Mflux(i)=cff*bry_val
+# endif
                 vbar(i,Jstr,kout)=bry_val
               END DO
             END IF
@@ -502,24 +533,27 @@
               dVde=vbar(i,Jend,kout)-vbar(i,Jend-1,kout)
 
               IF (LBC(inorth,isVbar,ng)%nudging) THEN
-                IF (LnudgeM2CLM(ng)) THEN
-                  obc_out=0.5_r8*                                       &
-     &                    (CLIMA(ng)%M2nudgcof(i,Jend  )+               &
-     &                     CLIMA(ng)%M2nudgcof(i,Jend+1))
-                  obc_in =obcfac(ng)*obc_out
-                ELSE
+!               IF (LnudgeM2CLM(ng)) THEN
+!                 obc_out=0.5_r8*                                       &
+!    &                    (CLIMA(ng)%M2nudgcof(i,Jend  )+               &
+!    &                     CLIMA(ng)%M2nudgcof(i,Jend+1))
+!                 obc_in =obcfac(ng)*obc_out
+!               ELSE
                   obc_out=M2obc_out(ng,inorth)
                   obc_in =M2obc_in (ng,inorth)
-                END IF
+!               END IF
                 IF ((dVdt*dVde).lt.0.0_r8) THEN
                   tau=obc_in
                 ELSE
                   tau=obc_out
                 END IF
+#ifdef IMPLICIT_NUDGING
+                IF (tau.gt.0.0_r8) tau=1.0_r8/tau
+#else
                 tau=tau*dt2d
+#endif
               END IF
 
-              IF ((dVdt*dVde).lt.0.0_r8) dVdt=0.0_r8
               IF ((dVdt*(grad(i  ,Jend)+                                &
      &                   grad(i+1,Jend))).gt.0.0_r8) THEN
                 dVdx=grad(i  ,Jend)
@@ -527,6 +561,7 @@
                 dVdx=grad(i+1,Jend)
               END IF
               cff=MAX(dVdx*dVdx+dVde*dVde,eps)
+              IF ((dVdt*dVde).lt.0.0_r8) dVdt=0.0_r8
 #ifdef RADIATION_2D
               Cx=MIN(cff,MAX(dVdt*dVdx,-cff))
 #else
@@ -545,9 +580,16 @@
      &                            (cff+Ce)
 
               IF (LBC(inorth,isVbar,ng)%nudging) THEN
+#ifdef IMPLICIT_NUDGING
+                phi=dt(ng)/(tau+dt(ng))
+                vbar(i,Jend+1,kout)=(1.0_r8-phi)*vbar(i,Jend+1,kout)+   &
+     &                              phi*BOUNDARY(ng)%vbar_north(i)
+
+#else
                 vbar(i,Jend+1,kout)=vbar(i,Jend+1,kout)+                &
      &                              tau*(BOUNDARY(ng)%vbar_north(i)-    &
      &                                   vbar(i,Jend+1,know))
+#endif
               END IF
 #ifdef MASKING
               vbar(i,Jend+1,kout)=vbar(i,Jend+1,kout)*                  &
@@ -633,10 +675,21 @@
      &                            zeta(i,Jend+1,know)))
 #endif
               Ce=SQRT(g*cff)
+#if defined ATM_PRESS && defined PRESS_COMPENSATE
+            vbar(i,Jend+1,kout)=bry_val+                                &
+     &                          Ce*(0.5_r8*                             &
+     &                              (zeta(i,Jend  ,know)+               &
+     &                               zeta(i,Jend+1,know)+               &
+     &                               fac*(FORCES(ng)%Pair(i,Jend  )+    &
+     &                                    FORCES(ng)%Pair(i,Jend+1)-    &
+     &                                    2.0_r8*OneAtm))-              &
+     &                              BOUNDARY(ng)%zeta_north(i))
+#else
               vbar(i,Jend+1,kout)=bry_val+                              &
      &                            Ce*(0.5_r8*(zeta(i,Jend  ,know)+      &
      &                                        zeta(i,Jend+1,know))-     &
      &                                BOUNDARY(ng)%zeta_north(i))
+#endif
 #ifdef MASKING
               vbar(i,Jend+1,kout)=vbar(i,Jend+1,kout)*                  &
      &                            GRID(ng)%vmask(i,Jend+1)
@@ -833,7 +886,9 @@
 # ifdef MASKING
                 bry_val=bry_val*GRID(ng)%vmask(i,Jend+1)
 # endif
+# ifdef NESTING_DEBUG
                 BRY_CONTACT(inorth,cr)%Mflux(i)=cff*bry_val
+# endif
                 vbar(i,Jend+1,kout)=bry_val
               END DO
             END IF
@@ -863,24 +918,27 @@
               dVdx=vbar(Istr,j,kout)-vbar(Istr+1,j,kout)
 
               IF (LBC(iwest,isVbar,ng)%nudging) THEN
-                IF (LnudgeM2CLM(ng)) THEN
-                  obc_out=0.5_r8*                                       &
-     &                    (CLIMA(ng)%M2nudgcof(Istr-1,j-1)+             &
-     &                     CLIMA(ng)%M2nudgcof(Istr-1,j  ))
-                  obc_in =obcfac(ng)*obc_out
-                ELSE
+!               IF (LnudgeM2CLM(ng)) THEN
+!                 obc_out=0.5_r8*                                       &
+!    &                    (CLIMA(ng)%M2nudgcof(Istr-1,j-1)+             &
+!    &                     CLIMA(ng)%M2nudgcof(Istr-1,j  ))
+!                 obc_in =obcfac(ng)*obc_out
+!               ELSE
                   obc_out=M2obc_out(ng,iwest)
                   obc_in =M2obc_in (ng,iwest)
-                END IF
+!               END IF
                 IF ((dVdt*dVdx).lt.0.0_r8) THEN
                   tau=obc_in
                 ELSE
                   tau=obc_out
                 END IF
+#ifdef IMPLICIT_NUDGING
+                IF (tau.gt.0.0_r8) tau=1.0_r8/tau
+#else
                 tau=tau*dt2d
+#endif
               END IF
 
-              IF ((dVdt*dVdx).lt.0.0_r8) dVdt=0.0_r8
               IF ((dVdt*(grad(Istr,j-1)+                                &
      &                   grad(Istr,j  ))).gt.0.0_r8) THEN
                 dVde=grad(Istr,j-1)
@@ -888,6 +946,7 @@
                 dVde=grad(Istr,j  )
               END IF
               cff=MAX(dVdx*dVdx+dVde*dVde,eps)
+              IF ((dVdt*dVdx).lt.0.0_r8) dVdt=0.0_r8
               Cx=dVdt*dVdx
 #ifdef RADIATION_2D
               Ce=MIN(cff,MAX(dVdt*dVde,-cff))
@@ -906,9 +965,15 @@
      &                            (cff+Cx)
 
               IF (LBC(iwest,isVbar,ng)%nudging) THEN
+#ifdef IMPLICIT_NUDGING
+                phi=dt(ng)/(tau+dt(ng))
+                vbar(Istr-1,j,kout)=(1.0_r8-phi)*vbar(Istr-1,j,kout)+   &
+     &                              phi*BOUNDARY(ng)%vbar_west(j)
+#else
                 vbar(Istr-1,j,kout)=vbar(Istr-1,j,kout)+                &
      &                              tau*(BOUNDARY(ng)%vbar_west(j)-     &
      &                                   vbar(Istr-1,j,know))
+#endif
               END IF
 #ifdef MASKING
               vbar(Istr-1,j,kout)=vbar(Istr-1,j,kout)*                  &
@@ -1020,15 +1085,15 @@
               dVdx=vbar(Iend,j,kout)-vbar(Iend-1,j,kout)
 
               IF (LBC(ieast,isVbar,ng)%nudging) THEN
-                IF (LnudgeM2CLM(ng)) THEN
-                  obc_out=0.5_r8*                                       &
-     &                    (CLIMA(ng)%M2nudgcof(Iend+1,j-1)+             &
-     &                     CLIMA(ng)%M2nudgcof(Iend+1,j  ))
-                  obc_in =obcfac(ng)*obc_out
-                ELSE
+!               IF (LnudgeM2CLM(ng)) THEN
+!                 obc_out=0.5_r8*                                       &
+!    &                    (CLIMA(ng)%M2nudgcof(Iend+1,j-1)+             &
+!    &                     CLIMA(ng)%M2nudgcof(Iend+1,j  ))
+!                 obc_in =obcfac(ng)*obc_out
+!               ELSE
                   obc_out=M2obc_out(ng,ieast)
                   obc_in =M2obc_in (ng,ieast)
-                END IF
+!               END IF
                 IF ((dVdt*dVdx).lt.0.0_r8) THEN
                   tau=obc_in
                 ELSE
@@ -1037,7 +1102,6 @@
                 tau=tau*dt2d
               END IF
 
-              IF ((dVdt*dVdx).lt.0.0_r8) dVdt=0.0_r8
               IF ((dVdt*(grad(Iend,j-1)+                                &
      &                   grad(Iend,j  ))).gt.0.0_r8) THEN
                 dVde=grad(Iend,j-1)
@@ -1045,6 +1109,7 @@
                 dVde=grad(Iend,j  )
               END IF
               cff=MAX(dVdx*dVdx+dVde*dVde,eps)
+              IF ((dVdt*dVdx).lt.0.0_r8) dVdt=0.0_r8
               Cx=dVdt*dVdx
 #ifdef RADIATION_2D
               Ce=MIN(cff,MAX(dVdt*dVde,-cff))
